@@ -47,6 +47,7 @@
 
 <!-- ================= OHM ================= -->
 <section id="ohm" hidden>
+  <div class="schem" id="ohm-sch"></div>
   <p class="hint">Preencha <b>dois</b> campos quaisquer e clique em Calcular. Aceita prefixos: 4k7, 10m, 2.2M, 100u…</p>
   <div class="calc">
     <label>Tensão (V)</label><input data-q="V"><span>V</span>
@@ -60,7 +61,7 @@
 
 <!-- ================= DIVISOR ================= -->
 <section id="div" hidden>
-  <p class="hint">Vin ── R1 ──┬── Vout ── R2 ── GND</p>
+  <div class="schem" id="d-sch"></div>
   <div class="calc">
     <label>Vin</label><input id="d-vin" value="12"><span>V</span>
     <label>R1</label><input id="d-r1" value="10k"><span>Ω</span>
@@ -73,6 +74,7 @@
 
 <!-- ================= LED ================= -->
 <section id="led" hidden>
+  <div class="schem" id="l-sch"></div>
   <div class="calc">
     <label>Tensão da fonte</label><input id="l-vs" value="5"><span>V</span>
     <label>Cor do LED</label>
@@ -102,6 +104,7 @@
 
 <!-- ================= SÉRIE/PARALELO ================= -->
 <section id="assoc" hidden>
+  <div class="schem" id="a-sch"></div>
   <p class="hint">Valores separados por vírgula ou espaço (ex.: <span class="mono">10k, 4k7, 2k2</span>).</p>
   <div class="row"><select id="a-kind"><option value="R">Resistores (Ω)</option><option value="C">Capacitores (F)</option><option value="L">Indutores (H)</option></select>
     <input id="a-vals" class="grow" value="10k, 4k7, 2k2"></div>
@@ -110,6 +113,7 @@
 
 <!-- ================= RC/RL ================= -->
 <section id="rc" hidden>
+  <div class="schem" id="rc-sch"></div>
   <div class="calc">
     <label>R</label><input id="rc-r" value="10k"><span>Ω</span>
     <label>C</label><input id="rc-c" value="100n"><span>F</span>
@@ -120,6 +124,7 @@
 
 <!-- ================= LC ================= -->
 <section id="lc" hidden>
+  <div class="schem" id="x-sch"></div>
   <div class="calc">
     <label>Frequência</label><input id="x-f" value="1k"><span>Hz</span>
     <label>L</label><input id="x-l" value="100u"><span>H</span>
@@ -130,7 +135,7 @@
 
 <!-- ================= 555 ================= -->
 <section id="t555" hidden>
-  <p class="hint">555 astável: VCC–R1–(pinos 7)–R2–(pinos 6/2)–C–GND</p>
+  <div class="schem" id="t-sch"></div>
   <div class="calc">
     <label>R1</label><input id="t-r1" value="1k"><span>Ω</span>
     <label>R2</label><input id="t-r2" value="10k"><span>Ω</span>
@@ -142,6 +147,7 @@
 <!-- ================= BOBINAS ================= -->
 <section id="bobina" hidden>
   <fieldset><legend>Toroide / núcleo com AL (ex.: Joule Thief)</legend>
+    <div class="schem" id="b-sch"></div>
     <div class="calc">
       <label>AL do núcleo</label><input id="b-al" value="1000"><span>nH/espira²</span>
       <label>Espiras (N)</label><input id="b-n" value="20"><span></span>
@@ -150,6 +156,7 @@
     <div class="res" id="b-out"></div>
   </fieldset>
   <fieldset><legend>Bobina com núcleo de ar (fórmula de Wheeler, 1 camada)</legend>
+    <div class="schem" id="w-sch"></div>
     <div class="calc">
       <label>Diâmetro</label><input id="w-d" value="10"><span>mm</span>
       <label>Comprimento</label><input id="w-len" value="20"><span>mm</span>
@@ -161,8 +168,10 @@
 
 </div></div>
 
-<script>
+<script type="module">
+import * as S from "/assets/schem.js";
 const $ = id => document.getElementById(id);
+const fv = (v, u) => (isFinite(v) && v !== null ? si(v, u) : "?");
 const SIM_URL = "https://www.falstad.com/circuit/circuitjs.html";
 
 // ---------- Números com prefixo SI ----------
@@ -210,6 +219,14 @@ $("sim-new").onclick = () => window.open(SIM_URL, "_blank", "noopener");
 }
 
 // ---------- Ohm ----------
+function ohmSch(V, I, R, P) {
+  $("ohm-sch").innerHTML = S.svg(400, 215,
+    S.battery(70, 70, 70, 160) + S.wire([70, 70], [70, 40], [320, 40], [320, 70]) + S.resistor(320, 70, 320, 160) +
+    S.wire([320, 160], [320, 185], [70, 185], [70, 160]) +
+    S.label(70, 70, 70, 160, "Fonte V", fv(V, "V"), -1) + S.label(320, 70, 320, 160, "R", fv(R, "Ω")) +
+    S.arrow(195, 40, "I = " + fv(I, "A")) + S.text(195, 207, "P = " + fv(P, "W") + "  (vira calor no resistor)"));
+}
+ohmSch();
 $("ohm-go").onclick = () => {
   const q = {}; document.querySelectorAll("#ohm [data-q]").forEach(i => { const v = parseSI(i.value); if (isFinite(v)) q[i.dataset.q] = v; });
   let { V, I, R, P } = q;
@@ -221,10 +238,11 @@ $("ohm-go").onclick = () => {
   else if (I != null && R != null) { V = I * R; P = V * I; }
   else if (I != null && P != null) { V = P / I; R = V / I; }
   else if (R != null && P != null) { V = Math.sqrt(P * R); I = V / R; }
+  ohmSch(V, I, R, P);
   $("ohm-out").innerHTML = `<div class="calc">${big("V =", si(V, "V"))}<span></span>${big("I =", si(I, "A"))}<span></span>${big("R =", si(R, "Ω"))}<span></span>${big("P =", si(P, "W"))}<span></span></div>
     <p>Resistor comercial mais próximo (E24): <b>${si(nearestE(R), "Ω")}</b> · Potência mínima do resistor: <b>${P <= 0.125 ? "1/8 W" : P <= 0.25 ? "1/4 W" : P <= 0.5 ? "1/2 W" : P <= 1 ? "1 W" : P <= 2 ? "2 W" : P <= 5 ? "5 W" : si(P * 2, "W")}</b> (use folga de 2×)</p>`;
 };
-$("ohm-clear").onclick = () => { document.querySelectorAll("#ohm [data-q]").forEach(i => i.value = ""); $("ohm-out").innerHTML = ""; };
+$("ohm-clear").onclick = () => { document.querySelectorAll("#ohm [data-q]").forEach(i => i.value = ""); $("ohm-out").innerHTML = ""; ohmSch(); };
 
 // ---------- Divisor ----------
 function divCalc() {
@@ -237,6 +255,14 @@ function divCalc() {
   }
   const r2eff = load > 0 ? r2 * load / (r2 + load) : r2;
   const vout = vin * r2eff / (r1 + r2eff), i = vin / (r1 + r2eff);
+  const hasLoad = load > 0;
+  $("d-sch").innerHTML = S.svg(460, 250,
+    S.battery(50, 70, 50, 180) + S.wire([50, 70], [50, 40], [200, 40], [200, 50]) + S.resistor(200, 50, 200, 125) + S.dot(200, 125) +
+    S.resistor(200, 125, 200, 200) + S.wire([200, 200], [200, 215], [50, 215], [50, 180]) + S.ground(125, 215) +
+    S.wire([200, 125], [hasLoad ? 380 : 340, 125]) + S.terminal(hasLoad ? 380 : 340, 125, "Vout") + S.val(hasLoad ? 380 : 340, 147, fv(vout, "V")) +
+    (hasLoad ? S.dot(300, 125) + S.resistor(300, 125, 300, 200) + S.wire([300, 200], [300, 215], [200, 215]) + S.label(300, 125, 300, 200, "Carga", fv(load, "Ω")) : "") +
+    S.label(50, 70, 50, 180, "Vin", fv(vin, "V"), -1) + S.label(200, 50, 200, 125, "R1", fv(r1, "Ω")) + S.label(200, 125, 200, 200, "R2", fv(r2, "Ω")) +
+    S.arrow(125, 40, "I = " + fv(i, "A")));
   $("d-out").innerHTML = `<div class="calc">${big("Vout =", si(vout, "V"))}<span></span>${big("Corrente =", si(i, "A"))}<span></span>
     ${big("Potência R1 =", si(i * i * r1, "W"))}<span></span>${big("Razão =", (r2eff / (r1 + r2eff)).toFixed(4))}<span></span></div>${load > 0 ? `<p class="hint">Com carga: R2 efetivo = ${si(r2eff, "Ω")}</p>` : ""}${extra}`;
 }
@@ -246,6 +272,18 @@ function divCalc() {
 function ledCalc() {
   const vs = parseSI($("l-vs").value), vf = parseSI($("l-vf").value), i = parseSI($("l-i").value), n = +$("l-n").value || 1;
   const drop = vs - vf * n;
+  {
+    const shown = Math.min(n, 4), x0 = 175, xe = x0 + 70 * shown, w = Math.max(380, xe + 70);
+    const r = drop > 0 ? drop / i : NaN, e = drop > 0 ? nearestE(r, E12, "up") : NaN;
+    let leds = "";
+    for (let k = 0; k < shown; k++) leds += S.diode(x0 + 70 * k, 50, x0 + 70 * (k + 1), 50, true) + S.text(x0 + 70 * k + 35, 80, `LED${k + 1}`) + S.val(x0 + 70 * k + 35, 94, fv(vf, "V"));
+    $("l-sch").innerHTML = S.svg(w, 215,
+      S.battery(50, 75, 50, 170) + S.wire([50, 75], [50, 50], [70, 50]) + S.resistor(70, 50, x0, 50) + leds +
+      S.wire([xe, 50], [xe + 30, 50], [xe + 30, 190], [50, 190], [50, 170]) +
+      S.label(50, 75, 50, 170, "Fonte", fv(vs, "V"), -1) + S.label(70, 50, x0, 50, "R", fv(e, "Ω")) +
+      (n > shown ? S.text(xe + 30, 40, `(${n} LEDs em série)`, { a: "end" }) : "") +
+      S.arrow((50 + xe) / 2, 190, "I = " + fv(drop > 0 ? drop / e : NaN, "A"), -1));
+  }
   if (!(drop > 0)) return ($("l-out").innerHTML = `<span class="error">A fonte (${si(vs, "V")}) precisa ser maior que ${si(vf * n, "V")} (soma dos LEDs).</span>`);
   const r = drop / i, e = nearestE(r, E12, "up"), ireal = drop / e, p = drop * ireal;
   $("l-out").innerHTML = `<div class="calc">${big("R calculado =", si(r, "Ω"))}<span></span>${big("Comercial (E12, acima) =", si(e, "Ω"))}<span></span>
@@ -306,6 +344,18 @@ function assocCalc() {
   if (!vals.length) return ($("a-out").innerHTML = "");
   const sum = vals.reduce((a, b) => a + b, 0), inv = 1 / vals.reduce((a, b) => a + 1 / b, 0);
   const [serie, paralelo] = k === "C" ? [inv, sum] : [sum, inv];
+  const draw = { R: S.resistor, C: S.capacitor, L: S.inductor }[k];
+  const shown = vals.slice(0, 5), more = vals.length - shown.length;
+  let sv = S.text(20, 22, "Série", { a: "start" }) + S.terminal(30, 60, "A", "end") + S.wire([30, 60], [50, 60]);
+  shown.forEach((v, j) => { sv += draw(50 + 80 * j, 60, 130 + 80 * j, 60) + S.val(90 + 80 * j, 40, si(v, unit)); });
+  const sx = 50 + 80 * shown.length;
+  sv += S.wire([sx, 60], [sx + 20, 60]) + S.terminal(sx + 20, 60, "B") + S.val(sx + 60, 64, "= " + si(serie, unit), "start");
+  let pv = S.text(20, 110, "Paralelo", { a: "start" }) + S.terminal(30, 130, "A", "end") + S.terminal(30, 220, "B", "end");
+  const lastX = 110 + 80 * (shown.length - 1);
+  pv += S.wire([30, 130], [lastX, 130]) + S.wire([30, 220], [lastX, 220]);
+  shown.forEach((v, j) => { const x = 110 + 80 * j; pv += S.dot(x, 130) + S.dot(x, 220) + draw(x, 130, x, 220) + S.val(x + 30, 179, si(v, unit), "start"); });
+  pv += S.val(lastX + 100, 180, "= " + si(paralelo, unit), "start");
+  $("a-sch").innerHTML = S.svg(Math.max(560, lastX + 200), 245, sv + pv + (more > 0 ? S.text(lastX + 70, 236, `(+${more} não desenhados)`, { a: "start" }) : ""));
   $("a-out").innerHTML = `<div class="calc">${big("Em série =", si(serie, unit))}<span></span>${big("Em paralelo =", si(paralelo, unit))}<span></span></div>
     <p class="hint">${vals.length} componentes: ${vals.map(v => si(v, unit)).join(", ")}</p>`;
 }
@@ -315,6 +365,15 @@ $("a-kind").onchange = $("a-vals").oninput = assocCalc; assocCalc();
 function rcCalc() {
   const r = parseSI($("rc-r").value), c = parseSI($("rc-c").value), l = parseSI($("rc-l").value);
   const tau = r * c, tauL = l / r;
+  const loop = (comp, nameC, valC) =>
+    S.battery(40, 70, 40, 160) + S.wire([40, 70], [40, 40], [70, 40]) + S.resistor(70, 40, 160, 40) + S.wire([160, 40], [200, 40], [200, 65]) +
+    comp(200, 65, 200, 160) + S.wire([200, 160], [200, 185], [40, 185], [40, 160]) +
+    S.label(70, 40, 160, 40, "R", fv(r, "Ω")) + S.label(200, 65, 200, 160, nameC, valC);
+  $("rc-sch").innerHTML =
+    S.svg(560, 215, loop(S.capacitor, "C", fv(c, "F")) + S.expCurve(300, 30, 230, 130, true) +
+      S.text(415, 22, "Tensão no capacitor (carga)") + S.val(415, 205, "τ = R·C = " + fv(tau, "s"))) +
+    S.svg(560, 215, loop(S.inductor, "L", fv(l, "H")) + S.expCurve(300, 30, 230, 130, true) +
+      S.text(415, 22, "Corrente no indutor (ao ligar)") + S.val(415, 205, "τ = L/R = " + fv(tauL, "s")));
   $("rc-out").innerHTML = `<fieldset><legend>RC</legend><div class="calc">${big("τ = R·C =", si(tau, "s"))}<span></span>
     ${big("Carga 99% (5τ) =", si(5 * tau, "s"))}<span></span>${big("Corte fc = 1/2πRC =", si(1 / (2 * Math.PI * tau), "Hz"))}<span></span></div>
     <div class="sunken-panel" style="margin-top:6px"><table class="interactive"><thead><tr><th>Tempo</th><th>Carga</th><th>Descarga</th></tr></thead><tbody>
@@ -328,6 +387,12 @@ function rcCalc() {
 function lcCalc() {
   const f = parseSI($("x-f").value), l = parseSI($("x-l").value), c = parseSI($("x-c").value);
   const xl = 2 * Math.PI * f * l, xc = 1 / (2 * Math.PI * f * c), f0 = 1 / (2 * Math.PI * Math.sqrt(l * c));
+  $("x-sch").innerHTML = S.svg(480, 210,
+    S.terminal(40, 40, "A", "end") + S.terminal(40, 170, "B", "end") + S.wire([40, 40], [300, 40]) + S.wire([40, 170], [300, 170]) +
+    S.dot(130, 40) + S.dot(130, 170) + S.inductor(130, 40, 130, 170) +
+    S.capacitor(300, 40, 300, 170) +
+    S.label(130, 40, 130, 170, "L = " + fv(l, "H"), "XL = " + fv(xl, "Ω")) + S.label(300, 40, 300, 170, "C = " + fv(c, "F"), "XC = " + fv(xc, "Ω")) +
+    S.val(210, 200, "Circuito tanque: ressoa em f₀ = " + fv(f0, "Hz")));
   $("x-out").innerHTML = `<div class="calc">${big("XL = 2πfL =", si(xl, "Ω"))}<span></span>${big("XC = 1/2πfC =", si(xc, "Ω"))}<span></span>
     ${big("Ressonância f₀ =", si(f0, "Hz"))}<span></span>${big("Impedância caract. √(L/C) =", si(Math.sqrt(l / c), "Ω"))}<span></span></div>`;
 }
@@ -337,6 +402,20 @@ function lcCalc() {
 function t555() {
   const r1 = parseSI($("t-r1").value), r2 = parseSI($("t-r2").value), c = parseSI($("t-c").value);
   const th = 0.693 * (r1 + r2) * c, tl = 0.693 * r2 * c, f = 1 / (th + tl);
+  const pin = (x, y, n, a = "middle") => `<text class="pin" x="${x}" y="${y}" text-anchor="${a}">${n}</text>`;
+  $("t-sch").innerHTML = S.svg(520, 310,
+    S.text(30, 34, "VCC", { a: "start" }) + S.wire([60, 30], [330, 30]) +
+    S.resistor(110, 30, 110, 120) + S.dot(110, 120) + S.wire([110, 120], [210, 120]) +
+    S.resistor(110, 120, 110, 190) + S.dot(110, 190) + S.wire([110, 190], [180, 190], [180, 170], [210, 170]) + S.wire([180, 190], [180, 205], [210, 205]) + S.dot(180, 190) +
+    S.capacitor(110, 190, 110, 275) + S.wire([60, 275], [330, 275]) + S.ground(195, 275) +
+    S.wire([240, 30], [240, 95]) + S.wire([290, 30], [290, 95]) + S.dot(240, 30) + S.dot(290, 30) + S.dot(110, 30) +
+    S.wire([240, 235], [240, 275]) + S.dot(240, 275) + S.dot(110, 275) + S.capacitor(290, 235, 290, 275) + S.dot(290, 275) +
+    `<rect class="chip" x="210" y="95" width="110" height="140"/>` + S.text(265, 165, "555").replace('class="t"', 'class="pin" style="font-size:16px"') +
+    pin(240, 108, "8") + pin(290, 108, "4") + pin(216, 124, "7", "start") + pin(216, 174, "6", "start") + pin(216, 209, "2", "start") +
+    pin(314, 154, "3", "end") + pin(240, 230, "1") + pin(290, 230, "5") +
+    S.wire([320, 150], [380, 150]) + S.terminal(380, 150, "OUT") + S.square(370, 175, 130, 40, th / (th + tl), 3) +
+    S.label(110, 30, 110, 120, "R1", fv(r1, "Ω"), -1) + S.label(110, 120, 110, 190, "R2", fv(r2, "Ω"), -1) + S.label(110, 190, 110, 275, "C", fv(c, "F"), -1) +
+    S.text(335, 262, "10 nF", { a: "start" }) + S.val(435, 232, fv(f, "Hz")));
   $("t-out").innerHTML = `<div class="calc">${big("Frequência =", si(f, "Hz"))}<span></span>${big("Período =", si(th + tl, "s"))}<span></span>
     ${big("Tempo alto =", si(th, "s"))}<span></span>${big("Tempo baixo =", si(tl, "s"))}<span></span>${big("Ciclo ativo =", (th / (th + tl) * 100).toFixed(1) + "%")}<span></span></div>
     <p class="hint">Monoestável com R1 e C: T = 1,1·R1·C = <b>${si(1.1 * r1 * c, "s")}</b></p>`;
@@ -349,8 +428,21 @@ function bobCalc() {
   let html = `<div class="calc">${big("L = AL·N² =", si(al * n * n, "H"))}<span></span>`;
   if (want > 0) html += `${big("Espiras para " + si(want, "H") + " =", Math.ceil(Math.sqrt(want / al)))}<span></span>`;
   $("b-out").innerHTML = html + "</div>";
+  const L = al * n * n;
+  $("b-sch").innerHTML = S.svg(460, 160, S.toroid(90, 80, n || 0) +
+    S.wire([90 - 30, 80 + 40], [30, 150]) + S.wire([90 + 30, 80 + 40], [150, 150]) +
+    S.text(210, 50, `N = ${isFinite(n) ? n : "?"} espiras`, { a: "start" }) + S.text(210, 72, `AL = ${$("b-al").value} nH/esp²`, { a: "start" }) +
+    S.val(210, 100, "L = " + fv(L, "H"), "start") + S.text(210, 124, "L = AL × N²  (dobrar N → 4× L)", { a: "start" }));
   // Wheeler: L(µH) = (d² · n²) / (18d + 40l), d e l em polegadas
   const d = parseFloat($("w-d").value) / 25.4, len = parseFloat($("w-len").value) / 25.4, nw = parseFloat($("w-n").value);
+  {
+    const dmm = parseFloat($("w-d").value), lmm = parseFloat($("w-len").value);
+    const k = Math.min(260 / (lmm || 1), 80 / (dmm || 1)), pl = Math.max(30, lmm * k), pd = Math.max(14, dmm * k);
+    $("w-sch").innerHTML = S.svg(460, 150, S.solenoid(60, 20, pl, pd, nw || 0) +
+      S.text(60 + pl / 2, 20 + pd + 32, `${$("w-len").value} mm`) + S.text(38, 20 + pd / 2 + 4, `Ø ${$("w-d").value}`, { a: "end" }) +
+      S.text(60 + pl + 20, 40, `${isFinite(nw) ? nw : "?"} espiras`, { a: "start" }) +
+      S.val(60 + pl + 20, 60, "L ≈ " + fv((d * d * nw * nw) / (18 * d + 40 * len) * 1e-6, "H"), "start"));
+  }
   $("w-out").innerHTML = `<div class="calc">${big("L ≈", si((d * d * nw * nw) / (18 * d + 40 * len) * 1e-6, "H"))}<span></span></div>`;
 }
 ["b-al", "b-n", "b-want", "w-d", "w-len", "w-n"].forEach(id => $(id).oninput = bobCalc); bobCalc();

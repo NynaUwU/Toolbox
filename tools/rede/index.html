@@ -17,6 +17,15 @@
   <div class="row">
     <label for="iface">Interface:</label>
     <select id="iface" class="grow"></select>
+    <label for="bits">Faixa:</label>
+    <select id="bits">
+      <option value="auto">Pela máscara da rede</option>
+      <option value="24">/24 — 255.255.255.0 (254 IPs)</option>
+      <option value="23">/23 — 255.255.254.0 (510 IPs)</option>
+      <option value="22">/22 — 255.255.252.0 (1.022 IPs)</option>
+      <option value="20">/20 — 255.255.240.0 (4.094 IPs)</option>
+      <option value="16">/16 — 255.255.0.0 (65.534 IPs)</option>
+    </select>
     <button class="default" id="scan">🔍 Procurar aparelhos</button>
   </div>
   <div class="progress-indicator segmented" id="bar" hidden style="margin-top:8px"><span class="progress-indicator-bar" style="width:0%"></span></div>
@@ -29,11 +38,11 @@
 </div>
 <div class="sunken-panel" style="max-height:calc(100vh - 190px);overflow:auto">
   <table class="interactive" id="devs" style="width:100%">
-    <thead><tr><th data-k="ip">IP ▲</th><th data-k="hostname">Nome</th><th data-k="vendor">Fabricante</th><th data-k="mac">MAC</th><th data-k="latency">Ping</th></tr></thead>
-    <tbody id="list"><tr><td colspan="5" class="muted">Clique em “Procurar aparelhos”.</td></tr></tbody>
+    <thead><tr><th data-k="ip">IP ▲</th><th data-k="hostname">Nome</th><th data-k="vendor">Fabricante</th><th data-k="mac">MAC</th></tr></thead>
+    <tbody id="list"><tr><td colspan="4" class="muted">Clique em “Procurar aparelhos”.</td></tr></tbody>
   </table>
 </div>
-<p class="muted">Aparelhos que bloqueiam ping e ainda não falaram com este PC podem não aparecer — rode de novo em alguns segundos. O <span style="color:#008000">●</span> marca aparelhos que não estavam na varredura anterior.</p>
+<p class="muted">Aparelhos em modo de economia (celulares com tela apagada) podem não responder na hora — rode de novo se faltar algum. O <span style="color:#008000">●</span> marca aparelhos que não estavam na varredura anterior.</p>
 
 <script type="module">
 import { api, post } from "/assets/jobs98.js";
@@ -45,8 +54,21 @@ const store = { get: k => { try { return JSON.parse(localStorage.getItem(k)); } 
 let known = new Set(store.get("net-known") || []);
 
 const ifaces = await api("/api/network/interfaces");
-$("iface").innerHTML = ifaces.map(n => `<option value="${n.prefix}">${esc(n.name)} — ${n.address}${n.virtual ? " (virtual)" : ""}</option>`).join("")
+$("iface").innerHTML = ifaces.map(n => `<option value="${n.address}">${esc(n.name)} — ${n.address}/${n.cidr} (${n.netmask})${n.virtual ? " · virtual" : ""}</option>`).join("")
   || "<option>Nenhuma rede encontrada</option>";
+// Estimativa de tempo conforme o tamanho da faixa
+function estimate() {
+  const n = ifaces.find(i => i.address === $("iface").value);
+  if (!n) return;
+  const bits = Math.min(30, Math.max(16, $("bits").value === "auto" ? n.cidr : +$("bits").value));
+  const count = 2 ** (32 - bits) - 2;
+  const secs = Math.ceil(count / (count > 1024 ? 512 : 128) * (count > 1024 ? 0.45 : 0.7)) + 4;
+  $("msg").textContent = `${count.toLocaleString("pt-BR")} endereços (/${bits}) · tempo estimado: ~${secs < 60 ? secs + " s" : Math.ceil(secs / 60) + " min"}`
+    + (n.cidr < 16 && $("bits").value === "auto" ? " · rede maior que /16: limitado a /16 em volta deste PC" : "")
+    + (bits < n.cidr ? ` · ⚠ a máscara desta interface é /${n.cidr}: endereços fora dela não fazem parte da rede local e não serão listados` : "");
+}
+$("iface").onchange = $("bits").onchange = estimate;
+estimate();
 
 function render() {
   if (!result) return;
@@ -55,29 +77,28 @@ function render() {
     .filter(d => !q || [d.ip, d.hostname, d.vendor, d.mac].join(" ").toLowerCase().includes(q))
     .sort((a, b) => {
       if (sortKey === "ip") return (ipNum(a.ip) - ipNum(b.ip)) * sortDir;
-      const x = a[sortKey] ?? (sortKey === "latency" ? 1e9 : "~"), y = b[sortKey] ?? (sortKey === "latency" ? 1e9 : "~");
-      return (typeof x === "number" ? x - y : String(x).localeCompare(String(y))) * sortDir;
+      return String(a[sortKey] ?? "~").localeCompare(String(b[sortKey] ?? "~")) * sortDir;
     });
   $("list").innerHTML = list.map(d => `<tr class="${known.size && !known.has(d.mac || d.ip) ? "new" : ""}">
     <td class="ip">${d.ip}${d.self ? '<span class="tag">este PC</span>' : ""}${d.gateway ? '<span class="tag">roteador</span>' : ""}</td>
     <td>${esc(d.hostname || "—")}</td>
     <td>${esc(d.vendor || "—")}</td>
-    <td class="mac">${esc(d.mac || "—")}</td>
-    <td>${d.latency == null ? "—" : d.latency < 1 ? "<1 ms" : Math.round(d.latency) + " ms"}</td></tr>`).join("")
-    || '<tr><td colspan="5" class="muted">Nada encontrado.</td></tr>';
+    <td class="mac">${esc(d.mac || "—")}</td></tr>`).join("")
+    || '<tr><td colspan="4" class="muted">Nada encontrado.</td></tr>';
 }
 
 $("scan").onclick = async () => {
-  $("scan").disabled = true; $("bar").hidden = false; $("msg").textContent = "Procurando… (cerca de 10–20 s)";
-  const { id } = await post("/api/network/scan", { prefix: $("iface").value });
+  $("scan").disabled = true; $("bar").hidden = false; $("msg").textContent = "Procurando…";
+  const { id } = await post("/api/network/scan", { address: $("iface").value, bits: $("bits").value });
   const poll = async () => {
     const j = await api(`/api/jobs/${id}`);
     $("bar").firstElementChild.style.width = `${j.progress || 0}%`;
+    if (j.status === "running") $("msg").textContent = j.stage;
     if (j.status === "running") return setTimeout(poll, 500);
     $("scan").disabled = false; $("bar").hidden = true;
     if (j.status === "error") { $("msg").innerHTML = `<span class="error">✖ ${esc(j.error)}</span>`; return; }
     result = j.result;
-    $("msg").textContent = `${result.devices.length} aparelhos em ${result.network.prefix}.0/24 · roteador: ${result.gateway || "?"} · ${new Date(result.scannedAt).toLocaleTimeString("pt-BR")}`;
+    $("msg").textContent = `${result.devices.length} aparelhos em ${result.range} (${result.scanned.toLocaleString("pt-BR")} endereços) · roteador: ${result.gateway || "?"} · ${new Date(result.scannedAt).toLocaleTimeString("pt-BR")}`;
     render();
     known = new Set(result.devices.map(d => d.mac || d.ip));
     store.set("net-known", [...known]);

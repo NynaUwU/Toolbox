@@ -14,6 +14,22 @@ async function getJSON(url, opts) {
 const post = url => getJSON(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
 
 // ---------- Navegação ----------
+// external = site de fora (nova aba) · window = abre em janela separada · demais = painel principal
+const href = i => esc(i.external || i.window ? i.url : "#" + i.url);
+const attrs = i => i.external ? 'target="_blank" rel="noopener"' : i.window ? `data-win="${esc(i.slug)}"` : "";
+function openWindow(i) {
+  const w = Math.min(i.width || 1100, screen.availWidth - 40), h = Math.min(i.height || 800, screen.availHeight - 60);
+  const left = Math.max(0, (screen.availWidth - w) / 2), top = Math.max(0, (screen.availHeight - h) / 2);
+  const win = window.open(i.url, `toolbox-${i.slug}`, `popup=yes,width=${w},height=${h},left=${left},top=${top}`);
+  if (win) win.focus(); else location.href = i.url; // bloqueador de pop-up: abre na própria aba
+}
+document.addEventListener("click", e => {
+  const a = e.target.closest("a[data-win]");
+  if (!a) return;
+  e.preventDefault();
+  const item = items.find(i => i.slug === a.dataset.win);
+  if (item) openWindow(item);
+});
 function renderNav() {
   const q = $("#search").value.trim().toLowerCase();
   const match = i => !q || `${i.title} ${i.description}`.toLowerCase().includes(q);
@@ -22,9 +38,9 @@ function renderNav() {
     const list = items.filter(i => i.kind === kind && match(i));
     if (!list.length) return "";
     return `<h3>${label}</h3>` + list.map(i =>
-      `<a href="${i.external ? esc(i.url) : "#" + esc(i.url)}" ${i.external ? 'target="_blank" rel="noopener"' : ""}
+      `<a href="${href(i)}" ${attrs(i)}
           class="${current === i.url ? "active" : ""}" title="${esc(i.description)}">
-        <span class="ico">${esc(i.icon)}</span>${esc(i.title)}${i.external ? " ↗" : ""}</a>`).join("");
+        <span class="ico">${esc(i.icon)}</span>${esc(i.title)}${i.external ? " ↗" : i.window ? " ⧉" : ""}</a>`).join("");
   }).join("") || '<p class="empty">Nada encontrado.</p>';
 }
 
@@ -34,8 +50,8 @@ function renderHome() {
     const list = items.filter(i => i.kind === kind);
     if (!list.length) return "";
     return `<h2>${label}</h2><div class="tiles">` + list.map(i =>
-      `<a class="tile" href="${i.external ? esc(i.url) : "#" + esc(i.url)}" ${i.external ? 'target="_blank" rel="noopener"' : ""}>
-        <span class="ico">${esc(i.icon)}</span><b>${esc(i.title)}${i.external ? " ↗" : ""}</b>
+      `<a class="tile" href="${href(i)}" ${attrs(i)}>
+        <span class="ico">${esc(i.icon)}</span><b>${esc(i.title)}${i.external ? " ↗" : i.window ? " ⧉" : ""}</b>
         <span class="desc">${esc(i.description)}</span></a>`).join("") + `</div>`;
   }).join("") + `</div>`;
 }

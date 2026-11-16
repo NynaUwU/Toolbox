@@ -13,6 +13,7 @@ import { detectOffice } from "./lib/office.mjs";
 import { installLibreOfficePortable } from "./lib/installer.mjs";
 import * as sys from "./lib/system.mjs";
 import * as net from "./lib/network.mjs";
+import * as sensors from "./lib/sensors.mjs";
 
 const PORT = Number(process.env.TOOLBOX_PORT) || 3098;
 const HOST = "127.0.0.1";
@@ -56,6 +57,7 @@ app.get("/api/catalog", (req, res) => {
         description: meta.description || "",
         icon: meta.icon || (kind === "tool" ? "🛠️" : "🌐"),
         width: meta.width, height: meta.height,
+        window: Boolean(meta.window), // abre em janela separada do navegador
         order: meta.order ?? 100,
         url: `/${dir}/${slug}/`,
       });
@@ -226,6 +228,18 @@ app.post("/api/system/kill", (req, res) => {
   catch (e) { res.status(400).json({ error: e.code === "EPERM" ? "Sem permissão para finalizar este processo." : e.message }); }
 });
 
+app.get("/api/system/sensors", async (req, res) => res.json(await sensors.sensors()));
+app.post("/api/system/sensors/lhm", (req, res) => {
+  if (req.body?.action === "start") {
+    try { sensors.startLhm(); return res.json({ ok: true }); }
+    catch (e) { return res.status(400).json({ error: e.message }); }
+  }
+  const job = createJob("lhm", "LibreHardwareMonitor portátil");
+  sensors.downloadLhm(msg => { job.stage = msg; })
+    .then(() => { finishJob(job); try { sensors.startLhm(); } catch {} }, err => finishJob(job, err));
+  res.json({ id: job.id });
+});
+
 // ---------- Dispositivos na rede ----------
 app.get("/api/network/interfaces", (req, res) => res.json(net.localNetworks()));
 app.post("/api/network/scan", (req, res) => {
@@ -233,7 +247,7 @@ app.post("/api/network/scan", (req, res) => {
   if (running) return res.json({ id: running.id });
   const job = createJob("netscan", "Varredura da rede");
   job.stage = "Procurando aparelhos…";
-  net.scan({ prefix: req.body?.prefix, onProgress: p => { job.progress = p; } })
+  net.scan({ address: req.body?.address, bits: req.body?.bits || "auto", onProgress: (p, msg) => { job.progress = p; if (msg) job.stage = msg; } })
     .then(r => { job.result = r; finishJob(job); }, err => finishJob(job, err));
   res.json({ id: job.id });
 });

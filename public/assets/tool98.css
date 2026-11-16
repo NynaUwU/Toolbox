@@ -48,3 +48,22 @@ tbody tr { cursor: default; }
 tbody tr:hover td { background: #e8e8f4; }
 tbody tr.highlighted td, tbody tr.highlighted:hover td { background: #000080; color: #fff; }
 tbody tr.highlighted td * { color: inherit; }
+/* Esquemas elétricos (schem.js) */
+.schem { background: #fff; box-shadow: inset -1px -1px #fff, inset 1px 1px #808080, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a; padding: 8px; margin: 6px 0 10px; }
+.schem-svg { width: 100%; max-width: 620px; height: auto; display: block; margin: 0 auto; }
+.schem-svg .w { stroke: #000; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.schem-svg .sym { fill: #fff; }
+.schem-svg .node { fill: #000; }
+.schem-svg .term { fill: #fff; stroke: #000; stroke-width: 2; }
+.schem-svg .t { font: 12px Tahoma, Arial, sans-serif; fill: #000; }
+.schem-svg .v { font: bold 12px Tahoma, Arial, sans-serif; fill: #000080; }
+.schem-svg .arr { stroke: #c00000; stroke-width: 2; fill: none; }
+.schem-svg .wave { stroke: #c00000; stroke-width: 2; fill: none; }
+.schem-svg .grid { stroke: #ddd; stroke-width: 1; }
+.schem-svg .axis { stroke: #000; stroke-width: 1; }
+.schem-svg .core { fill: #8a8a8a; stroke: #000; stroke-width: 1.5; }
+.schem-svg .coil { stroke: #b06000; stroke-width: 2.5; fill: none; }
+.schem-svg .former { fill: #f3e6c8; stroke: #000; stroke-width: 1; }
+.schem-svg .dim { stroke: #000080; stroke-width: 1; fill: none; }
+.schem-svg .chip { fill: #222; stroke: #000; }
+.schem-svg .pin { font: 10px Tahoma, Arial, sans-serif; fill: #fff; }

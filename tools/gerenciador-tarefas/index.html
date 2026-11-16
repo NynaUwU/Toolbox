@@ -18,16 +18,24 @@
   #proc-table th { cursor: pointer; white-space: nowrap; position: sticky; top: 0; }
   #proc-table td:nth-child(n+3) { text-align: right; font-family: "Courier New", monospace; }
   .big-num { font-size: 18px; font-weight: bold; }
+  .tchips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .tchip { background: #000; color: #0f0; font-family: "Courier New", monospace; padding: 3px 8px; font-size: 12px; }
+  .tchip.warm { color: #ff0; } .tchip.hot { color: #f44; }
+  .t-ok { color: #006400; font-weight: bold; } .t-warm { color: #a06000; font-weight: bold; } .t-hot { color: #c00000; font-weight: bold; }
+  #temps td:nth-child(n+3) { text-align: right; font-family: "Courier New", monospace; }
+  .tbar { display: inline-block; height: 8px; background: currentColor; vertical-align: middle; margin-right: 6px; }
 </style>
 </head><body>
 <menu role="tablist" id="tabs">
   <li role="tab" aria-selected="true"><a href="#desempenho">Desempenho</a></li>
+  <li role="tab"><a href="#temperaturas">Temperaturas</a></li>
   <li role="tab"><a href="#processos">Processos</a></li>
   <li role="tab"><a href="#sistema">Sistema</a></li>
 </menu>
 <div class="window panel" role="tabpanel"><div class="window-body">
 
 <section id="desempenho">
+  <div class="tchips" id="tchips"></div>
   <div class="perf">
     <fieldset><legend>CPU — <span id="cpu-pct" class="big-num">0%</span></legend>
       <canvas class="graph" id="g-cpu" width="300" height="110"></canvas>
@@ -44,6 +52,23 @@
     <fieldset><legend>Discos</legend><div id="disks" class="stack"></div></fieldset>
   </div>
   <p class="muted" id="uptime"></p>
+</section>
+
+<section id="temperaturas" hidden>
+  <p class="muted" id="t-src"></p>
+  <fieldset id="lhm-box" hidden>
+    <legend>Sensores completos (CPU, placa-mãe, SSD, ventoinhas)</legend>
+    <p>O Windows só libera esses sensores para programas com permissão de administrador. A Toolbox pode usar o <b>LibreHardwareMonitor portátil</b> (código aberto, ~5 MB, fica em <code>runtime\librehardwaremonitor</code>; nada é instalado).</p>
+    <p class="muted">Ao abrir, o Windows pede confirmação de administrador. Ele fica minimizado perto do relógio; feche-o por lá quando quiser.</p>
+    <div class="row"><button id="lhm-get">⬇ Baixar e abrir</button><button id="lhm-start" hidden>▶ Abrir LibreHardwareMonitor</button><span id="lhm-msg"></span></div>
+  </fieldset>
+  <div class="sunken-panel" style="max-height:calc(100vh - 230px);overflow:auto">
+    <table class="interactive" style="width:100%"><thead><tr><th>Componente</th><th>Sensor</th><th>Atual</th><th>Máx.</th></tr></thead><tbody id="temps"></tbody></table>
+  </div>
+  <fieldset id="fans-box" hidden style="margin-top:8px"><legend>Ventoinhas</legend>
+    <div class="sunken-panel"><table class="interactive" style="width:100%"><tbody id="fans"></tbody></table></div>
+  </fieldset>
+  <fieldset id="gpu-box" hidden style="margin-top:8px"><legend>GPU (nvidia-smi)</legend><div id="gpus" class="kv"></div></fieldset>
 </section>
 
 <section id="processos" hidden>
@@ -165,6 +190,48 @@ async function loadInfo() {
   $("nets").innerHTML = i.networks.map(n => `<tr><td>${esc(n.name)}</td><td class="mono">${esc(n.address)}</td><td class="mono">${esc(n.mac)}</td></tr>`).join("");
 }
 
+
+// ---------- Temperaturas ----------
+const tclass = v => v >= 85 ? "hot" : v >= 70 ? "warm" : "ok";
+async function tickTemps() {
+  let s;
+  try { s = await api("/api/system/sensors"); } catch { return; }
+  // resumo na aba Desempenho: maior temperatura por componente
+  const best = new Map();
+  for (const t of s.temps) if (!best.has(t.hw) || t.value > best.get(t.hw).value) best.set(t.hw, t);
+  $("tchips").innerHTML = [...best.values()].slice(0, 6).map(t => `<span class="tchip ${tclass(t.value) === "ok" ? "" : tclass(t.value)}">🌡 ${esc(t.hw)}: ${t.value.toFixed(0)} °C</span>`).join("")
+    || (s.lhm.available && !s.lhm.running ? '<span class="muted">🌡 Temperaturas da CPU: veja a aba Temperaturas.</span>' : "");
+  if (tab !== "temperaturas") return;
+  $("t-src").textContent = `Fonte: ${s.source}${s.temps.length ? "" : " — nenhum sensor disponível sem permissão de administrador."}`;
+  $("lhm-box").hidden = !s.lhm.available || s.lhm.running;
+  $("lhm-get").hidden = s.lhm.downloaded; $("lhm-start").hidden = !s.lhm.downloaded;
+  $("temps").innerHTML = s.temps.map(t => `<tr><td>${esc(t.hw)}</td><td>${esc(t.name)}</td>
+    <td class="t-${tclass(t.value)}"><span class="tbar" style="width:${Math.min(60, t.value * 0.6)}px"></span>${t.value.toFixed(1)} °C</td>
+    <td>${isFinite(t.max) ? t.max.toFixed(1) + " °C" : "—"}</td></tr>`).join("")
+    || '<tr><td colspan="4" class="muted">Sem leituras.</td></tr>';
+  $("fans-box").hidden = !s.fans.length;
+  $("fans").innerHTML = s.fans.map(f => `<tr><td>${esc(f.hw)}</td><td>${esc(f.name)}</td><td style="text-align:right" class="mono">${Math.round(f.rpm)} RPM</td></tr>`).join("");
+  $("gpu-box").hidden = !s.gpus.length;
+  $("gpus").innerHTML = s.gpus.map(g => [["GPU", g.name], ["Temperatura", g.temp != null ? g.temp + " °C" : "—"], ["Uso", g.load != null ? g.load + "%" : "—"],
+    ["Memória", g.memUsed != null ? `${g.memUsed} / ${g.memTotal} MB` : "—"], ["Ventoinha", g.fan != null ? g.fan + "%" : "—"], ["Consumo", g.power != null ? g.power + " W" : "—"]]
+    .map(([k, v]) => `<span>${k}:</span><b>${esc(v)}</b>`).join("")).join("");
+}
+$("lhm-get").onclick = async () => {
+  $("lhm-get").disabled = true; $("lhm-msg").textContent = "Baixando…";
+  const { id } = await post("/api/system/sensors/lhm", { action: "download" });
+  const poll = async () => {
+    const j = await api(`/api/jobs/${id}`);
+    if (j.status === "running") { $("lhm-msg").textContent = j.stage; return setTimeout(poll, 800); }
+    $("lhm-get").disabled = false;
+    $("lhm-msg").textContent = j.status === "done" ? "Pronto — confirme a permissão de administrador na janela do Windows." : `✖ ${j.error}`;
+  };
+  poll();
+};
+$("lhm-start").onclick = async () => {
+  try { await post("/api/system/sensors/lhm", { action: "start" }); $("lhm-msg").textContent = "Confirme a permissão de administrador na janela do Windows…"; }
+  catch (e) { $("lhm-msg").textContent = e.message; }
+};
+
 // ---------- Abas e ciclo de atualização ----------
 let tab = "desempenho";
 document.querySelectorAll("#tabs li").forEach(li => li.onclick = e => {
@@ -174,9 +241,12 @@ document.querySelectorAll("#tabs li").forEach(li => li.onclick = e => {
   document.querySelectorAll("section").forEach(s => s.hidden = s.id !== tab);
   if (tab === "processos") tickProcs();
   if (tab === "sistema") loadInfo();
+  if (tab === "temperaturas") tickTemps();
 });
 tickPerf();
 setInterval(() => { if (!document.hidden) tickPerf(); }, 1500);
 setInterval(() => { if (!document.hidden && tab === "processos") tickProcs(); }, 3000);
+tickTemps();
+setInterval(() => { if (!document.hidden && (tab === "temperaturas" || tab === "desempenho")) tickTemps(); }, 3000);
 </script>
 </body></html>
