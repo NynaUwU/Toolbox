@@ -11,6 +11,8 @@ import { download, FORMATS } from "./lib/youtube.mjs";
 import * as updater from "./lib/updater.mjs";
 import { detectOffice } from "./lib/office.mjs";
 import { installLibreOfficePortable } from "./lib/installer.mjs";
+import * as sys from "./lib/system.mjs";
+import * as net from "./lib/network.mjs";
 
 const PORT = Number(process.env.TOOLBOX_PORT) || 3098;
 const HOST = "127.0.0.1";
@@ -213,6 +215,27 @@ app.post("/api/tools/update", (req, res) => {
     toolsCache = null;
     res.json({ ok: !err, output: String(out || errOut).trim().slice(-600) });
   });
+});
+
+// ---------- Gerenciador de tarefas ----------
+app.get("/api/system/info", async (req, res) => res.json(await sys.systemInfo()));
+app.get("/api/system/perf", async (req, res) => res.json(await sys.performance()));
+app.get("/api/system/processes", async (req, res) => res.json(await sys.processes()));
+app.post("/api/system/kill", (req, res) => {
+  try { sys.killProcess(req.body?.pid); res.json({ ok: true }); }
+  catch (e) { res.status(400).json({ error: e.code === "EPERM" ? "Sem permissão para finalizar este processo." : e.message }); }
+});
+
+// ---------- Dispositivos na rede ----------
+app.get("/api/network/interfaces", (req, res) => res.json(net.localNetworks()));
+app.post("/api/network/scan", (req, res) => {
+  const running = listJobs().find(j => j.type === "netscan" && j.status === "running");
+  if (running) return res.json({ id: running.id });
+  const job = createJob("netscan", "Varredura da rede");
+  job.stage = "Procurando aparelhos…";
+  net.scan({ prefix: req.body?.prefix, onProgress: p => { job.progress = p; } })
+    .then(r => { job.result = r; finishJob(job); }, err => finishJob(job, err));
+  res.json({ id: job.id });
 });
 
 // LibreOffice portátil: baixado e extraído para runtime/ só quando o usuário pede

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dispositivos na rede</title>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/table98.js" defer></script>
+<style>
+  #devs td, #devs th { white-space: nowrap; }
+  #devs th { cursor: pointer; position: sticky; top: 0; }
+  #devs td.ip { font-family: "Courier New", monospace; font-weight: bold; }
+  #devs td.mac { font-family: "Courier New", monospace; }
+  .tag { display: inline-block; padding: 0 4px; margin-left: 4px; background: #ffffe1; border: 1px solid #808080; font-size: 10px; }
+  tr.highlighted .tag { color: #000 !important; }
+  .new td.ip::after { content: " ●"; color: #008000; }
+</style>
+</head><body class="stack">
+<fieldset>
+  <legend>Rede</legend>
+  <div class="row">
+    <label for="iface">Interface:</label>
+    <select id="iface" class="grow"></select>
+    <button class="default" id="scan">🔍 Procurar aparelhos</button>
+  </div>
+  <div class="progress-indicator segmented" id="bar" hidden style="margin-top:8px"><span class="progress-indicator-bar" style="width:0%"></span></div>
+  <p id="msg" class="muted"></p>
+</fieldset>
+
+<div class="row">
+  <input id="filter" type="text" placeholder="Filtrar por IP, nome, fabricante, MAC…" class="grow">
+  <button id="copy" title="Copiar a lista como texto">📋 Copiar lista</button>
+</div>
+<div class="sunken-panel" style="max-height:calc(100vh - 190px);overflow:auto">
+  <table class="interactive" id="devs" style="width:100%">
+    <thead><tr><th data-k="ip">IP ▲</th><th data-k="hostname">Nome</th><th data-k="vendor">Fabricante</th><th data-k="mac">MAC</th><th data-k="latency">Ping</th></tr></thead>
+    <tbody id="list"><tr><td colspan="5" class="muted">Clique em “Procurar aparelhos”.</td></tr></tbody>
+  </table>
+</div>
+<p class="muted">Aparelhos que bloqueiam ping e ainda não falaram com este PC podem não aparecer — rode de novo em alguns segundos. O <span style="color:#008000">●</span> marca aparelhos que não estavam na varredura anterior.</p>
+
+<script type="module">
+import { api, post } from "/assets/jobs98.js";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const ipNum = ip => ip.split(".").reduce((a, b) => a * 256 + +b, 0);
+let result = null, sortKey = "ip", sortDir = 1;
+const store = { get: k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+let known = new Set(store.get("net-known") || []);
+
+const ifaces = await api("/api/network/interfaces");
+$("iface").innerHTML = ifaces.map(n => `<option value="${n.prefix}">${esc(n.name)} — ${n.address}${n.virtual ? " (virtual)" : ""}</option>`).join("")
+  || "<option>Nenhuma rede encontrada</option>";
+
+function render() {
+  if (!result) return;
+  const q = $("filter").value.trim().toLowerCase();
+  const list = result.devices
+    .filter(d => !q || [d.ip, d.hostname, d.vendor, d.mac].join(" ").toLowerCase().includes(q))
+    .sort((a, b) => {
+      if (sortKey === "ip") return (ipNum(a.ip) - ipNum(b.ip)) * sortDir;
+      const x = a[sortKey] ?? (sortKey === "latency" ? 1e9 : "~"), y = b[sortKey] ?? (sortKey === "latency" ? 1e9 : "~");
+      return (typeof x === "number" ? x - y : String(x).localeCompare(String(y))) * sortDir;
+    });
+  $("list").innerHTML = list.map(d => `<tr class="${known.size && !known.has(d.mac || d.ip) ? "new" : ""}">
+    <td class="ip">${d.ip}${d.self ? '<span class="tag">este PC</span>' : ""}${d.gateway ? '<span class="tag">roteador</span>' : ""}</td>
+    <td>${esc(d.hostname || "—")}</td>
+    <td>${esc(d.vendor || "—")}</td>
+    <td class="mac">${esc(d.mac || "—")}</td>
+    <td>${d.latency == null ? "—" : d.latency < 1 ? "<1 ms" : Math.round(d.latency) + " ms"}</td></tr>`).join("")
+    || '<tr><td colspan="5" class="muted">Nada encontrado.</td></tr>';
+}
+
+$("scan").onclick = async () => {
+  $("scan").disabled = true; $("bar").hidden = false; $("msg").textContent = "Procurando… (cerca de 10–20 s)";
+  const { id } = await post("/api/network/scan", { prefix: $("iface").value });
+  const poll = async () => {
+    const j = await api(`/api/jobs/${id}`);
+    $("bar").firstElementChild.style.width = `${j.progress || 0}%`;
+    if (j.status === "running") return setTimeout(poll, 500);
+    $("scan").disabled = false; $("bar").hidden = true;
+    if (j.status === "error") { $("msg").innerHTML = `<span class="error">✖ ${esc(j.error)}</span>`; return; }
+    result = j.result;
+    $("msg").textContent = `${result.devices.length} aparelhos em ${result.network.prefix}.0/24 · roteador: ${result.gateway || "?"} · ${new Date(result.scannedAt).toLocaleTimeString("pt-BR")}`;
+    render();
+    known = new Set(result.devices.map(d => d.mac || d.ip));
+    store.set("net-known", [...known]);
+  };
+  poll();
+};
+
+$("filter").oninput = render;
+document.querySelectorAll("#devs th").forEach(th => th.onclick = () => {
+  sortDir = sortKey === th.dataset.k ? -sortDir : 1; sortKey = th.dataset.k;
+  document.querySelectorAll("#devs th").forEach(t => t.textContent = t.textContent.replace(/ [▲▼]$/, ""));
+  th.textContent += sortDir > 0 ? " ▲" : " ▼";
+  render();
+});
+$("copy").onclick = () => {
+  if (!result) return;
+  const txt = result.devices.map(d => [d.ip, d.hostname || "", d.vendor || "", d.mac || ""].join("\t")).join("\n");
+  navigator.clipboard.writeText("IP\tNome\tFabricante\tMAC\n" + txt).then(() => $("msg").textContent = "Lista copiada!");
+};
+</script>
+</body></html>

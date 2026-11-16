@@ -43,3 +43,8 @@ button.link { all: unset; color: #0000ee; text-decoration: underline; cursor: po
 [hidden] { display: none !important; }
 .dropzone { display: block; }
 .dropzone > * { display: block; margin: 2px 0; }
+/* Linhas de tabela selecionáveis (ver table98.js) */
+tbody tr { cursor: default; }
+tbody tr:hover td { background: #e8e8f4; }
+tbody tr.highlighted td, tbody tr.highlighted:hover td { background: #000080; color: #fff; }
+tbody tr.highlighted td * { color: inherit; }

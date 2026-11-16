@@ -11,7 +11,12 @@ Central pessoal de ferramentas que roda **só no seu computador** (http://localh
 | 📏 Conversor de unidades | Peso, comprimento, temperatura, volume, área, velocidade, pressão, energia, potência, tempo, dados, ângulo, torque | — |
 | 💱 Conversor de moedas | 160+ moedas, guarda a última cotação para uso offline | open.er-api.com / Frankfurter |
 | 🔌 Bitolas de fio | AWG ↔ mm² ↔ diâmetro, corrente (NBR 5410), queda de tensão | — |
-| 🔐 🧾 🔢 | Gerador de senhas, formatador de JSON, contador de texto | — |
+| 🔬 Simulador de circuitos | CircuitJS (Falstad, online) + calculadoras offline: Ohm, divisor, LED, código de cores, série/paralelo, RC/RL, LC, 555, bobinas | — |
+| 📊 Gerenciador de tarefas | CPU (por núcleo), memória, rede, discos, processos (finalizar), informações do PC | PowerShell / netstat do Windows |
+| 📡 Dispositivos na rede | IP, nome, fabricante e MAC dos aparelhos da rede local | ping / arp do Windows |
+| 🔢 Contador de texto | Caracteres, palavras, linhas, tempo de leitura | — |
+
+Em todas as tabelas: **clique numa linha para destacá-la** (Ctrl+clique marca várias, Esc limpa).
 
 Arquivos baixados/convertidos vão para **`Downloads\Toolbox`** (mude com a variável `TOOLBOX_OUTPUT`).
 

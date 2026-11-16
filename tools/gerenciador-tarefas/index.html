@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gerenciador de tarefas</title>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/table98.js" defer></script>
+<style>
+  body { display: flex; flex-direction: column; }
+  .panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .panel > .window-body { flex: 1; overflow: auto; }
+  .perf { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px; }
+  .graph { background: #000; display: block; width: 100%; height: 110px; image-rendering: pixelated; }
+  .meter { display: flex; align-items: center; gap: 8px; }
+  .meter .progress-indicator { flex: 1; }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; }
+  .kv b { overflow-wrap: anywhere; }
+  .cores { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 4px; margin-top: 6px; }
+  .core { background: #000; color: #0f0; font-family: "Courier New", monospace; font-size: 11px; padding: 2px 4px; position: relative; overflow: hidden; }
+  .core i { position: absolute; left: 0; bottom: 0; height: 3px; background: #0f0; }
+  #proc-table th { cursor: pointer; white-space: nowrap; position: sticky; top: 0; }
+  #proc-table td:nth-child(n+3) { text-align: right; font-family: "Courier New", monospace; }
+  .big-num { font-size: 18px; font-weight: bold; }
+</style>
+</head><body>
+<menu role="tablist" id="tabs">
+  <li role="tab" aria-selected="true"><a href="#desempenho">Desempenho</a></li>
+  <li role="tab"><a href="#processos">Processos</a></li>
+  <li role="tab"><a href="#sistema">Sistema</a></li>
+</menu>
+<div class="window panel" role="tabpanel"><div class="window-body">
+
+<section id="desempenho">
+  <div class="perf">
+    <fieldset><legend>CPU — <span id="cpu-pct" class="big-num">0%</span></legend>
+      <canvas class="graph" id="g-cpu" width="300" height="110"></canvas>
+      <div class="cores" id="cores"></div>
+    </fieldset>
+    <fieldset><legend>Memória — <span id="mem-pct" class="big-num">0%</span></legend>
+      <canvas class="graph" id="g-mem" width="300" height="110"></canvas>
+      <p id="mem-txt" class="mono"></p>
+    </fieldset>
+    <fieldset><legend>Rede</legend>
+      <canvas class="graph" id="g-net" width="300" height="110"></canvas>
+      <p class="mono"><span style="color:#008000">▼ <span id="net-rx">0</span></span> &nbsp; <span style="color:#a00000">▲ <span id="net-tx">0</span></span></p>
+    </fieldset>
+    <fieldset><legend>Discos</legend><div id="disks" class="stack"></div></fieldset>
+  </div>
+  <p class="muted" id="uptime"></p>
+</section>
+
+<section id="processos" hidden>
+  <div class="row" style="margin-bottom:6px">
+    <input id="filter" type="text" placeholder="Filtrar processos…" class="grow">
+    <span id="proc-count" class="muted"></span>
+    <button id="kill" disabled>Finalizar tarefa</button>
+  </div>
+  <div class="sunken-panel" style="height:calc(100vh - 110px);overflow:auto">
+    <table class="interactive" id="proc-table" style="width:100%">
+      <thead><tr><th data-k="name">Nome</th><th data-k="title">Janela</th><th data-k="pid">PID</th><th data-k="cpu">CPU ▼</th><th data-k="mem">Memória</th></tr></thead>
+      <tbody id="procs"></tbody>
+    </table>
+  </div>
+</section>
+
+<section id="sistema" hidden>
+  <fieldset><legend>Computador</legend><div class="kv" id="info"></div></fieldset>
+  <fieldset><legend>Rede</legend>
+    <div class="sunken-panel"><table class="interactive"><thead><tr><th>Interface</th><th>Endereço</th><th>MAC</th></tr></thead><tbody id="nets"></tbody></table></div>
+  </fieldset>
+</section>
+
+</div></div>
+<script type="module">
+import { api, post } from "/assets/jobs98.js";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const bytes = (b, d = 1) => { const u = ["B", "KB", "MB", "GB", "TB"]; let i = 0; while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; } return `${b.toFixed(i ? d : 0).replace(".", ",")} ${u[i]}`; };
+const rate = b => bytes(b) + "/s";
+const dur = s => { const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return `${d ? d + "d " : ""}${h}h ${m}min`; };
+
+// ---------- Gráficos estilo osciloscópio ----------
+const N = 60;
+const hist = { cpu: [], mem: [], rx: [], tx: [] };
+function push(arr, v) { arr.push(v); if (arr.length > N) arr.shift(); }
+function draw(id, series, max) {
+  const c = $(id), g = c.getContext("2d"), w = c.width, h = c.height;
+  g.fillStyle = "#000"; g.fillRect(0, 0, w, h);
+  g.strokeStyle = "#004000"; g.lineWidth = 1;
+  for (let x = 0; x <= w; x += w / 12) { g.beginPath(); g.moveTo(x + .5, 0); g.lineTo(x + .5, h); g.stroke(); }
+  for (let y = 0; y <= h; y += h / 5) { g.beginPath(); g.moveTo(0, y + .5); g.lineTo(w, y + .5); g.stroke(); }
+  for (const [data, color] of series) {
+    g.strokeStyle = color; g.lineWidth = 1.5; g.beginPath();
+    data.forEach((v, i) => { const x = w - (data.length - 1 - i) * (w / (N - 1)), y = h - (v / max) * (h - 2) - 1; i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.stroke();
+  }
+}
+
+async function tickPerf() {
+  let p;
+  try { p = await api("/api/system/perf"); } catch { return; }
+  push(hist.cpu, p.cpu.total);
+  const memPct = p.memory.used / p.memory.total * 100;
+  push(hist.mem, memPct);
+  push(hist.rx, p.net.rx); push(hist.tx, p.net.tx);
+  $("cpu-pct").textContent = `${Math.round(p.cpu.total)}%`;
+  $("mem-pct").textContent = `${Math.round(memPct)}%`;
+  $("mem-txt").textContent = `Em uso: ${bytes(p.memory.used)} de ${bytes(p.memory.total)} · Livre: ${bytes(p.memory.free)}`;
+  $("cores").innerHTML = p.cpu.perCore.map((v, i) => `<div class="core">#${i} ${Math.round(v)}%<i style="width:${v}%"></i></div>`).join("");
+  $("net-rx").textContent = rate(p.net.rx); $("net-tx").textContent = rate(p.net.tx);
+  $("disks").innerHTML = p.disks.map(d => {
+    const pct = d.used / d.total * 100;
+    return `<div><b>${esc(d.mount)}</b> — ${bytes(d.free)} livres de ${bytes(d.total)}
+      <div class="meter"><div class="progress-indicator segmented"><span class="progress-indicator-bar" style="width:${pct}%"></span></div><span>${Math.round(pct)}%</span></div></div>`;
+  }).join("");
+  $("uptime").textContent = `Ligado há ${dur(p.uptime)}${p.load ? ` · carga ${p.load.map(l => l.toFixed(2)).join(" / ")}` : ""}`;
+  draw("g-cpu", [[hist.cpu, "#0f0"]], 100);
+  draw("g-mem", [[hist.mem, "#ff0"]], 100);
+  draw("g-net", [[hist.rx, "#0f0"], [hist.tx, "#f44"]], Math.max(1024, ...hist.rx, ...hist.tx) * 1.1);
+}
+
+// ---------- Processos ----------
+let procs = [], sortKey = "cpu", sortDir = -1, selectedPid = null;
+async function tickProcs() {
+  try { procs = await api("/api/system/processes"); } catch { return; }
+  renderProcs();
+}
+function renderProcs() {
+  const q = $("filter").value.trim().toLowerCase();
+  const list = procs.filter(p => !q || `${p.name} ${p.title} ${p.pid}`.toLowerCase().includes(q))
+    .sort((a, b) => { const x = a[sortKey], y = b[sortKey]; return (typeof x === "string" ? x.localeCompare(y) : x - y) * sortDir; });
+  $("proc-count").textContent = `${list.length} processos`;
+  $("procs").innerHTML = list.slice(0, 400).map(p =>
+    `<tr data-pid="${p.pid}" class="${p.pid === selectedPid ? "highlighted" : ""}"><td>${esc(p.name)}</td><td>${esc(p.title)}</td><td>${p.pid}</td><td>${p.cpu.toFixed(1)}%</td><td>${bytes(p.mem)}</td></tr>`).join("");
+}
+$("procs").addEventListener("click", e => {
+  const tr = e.target.closest("tr");
+  // table98.js alterna o destaque; aqui só lembramos qual PID está selecionado
+  setTimeout(() => { selectedPid = tr.classList.contains("highlighted") ? +tr.dataset.pid : null; $("kill").disabled = !selectedPid; });
+});
+$("filter").oninput = renderProcs;
+document.querySelectorAll("#proc-table th").forEach(th => th.onclick = () => {
+  const k = th.dataset.k;
+  sortDir = sortKey === k ? -sortDir : (k === "name" || k === "title" ? 1 : -1);
+  sortKey = k;
+  document.querySelectorAll("#proc-table th").forEach(t => t.textContent = t.textContent.replace(/ [▲▼]$/, ""));
+  th.textContent += sortDir > 0 ? " ▲" : " ▼";
+  renderProcs();
+});
+$("kill").onclick = async () => {
+  const p = procs.find(x => x.pid === selectedPid);
+  if (!p || !confirm(`Finalizar "${p.name}" (PID ${p.pid})?\nDados não salvos nesse programa serão perdidos.`)) return;
+  try { await post("/api/system/kill", { pid: p.pid }); selectedPid = null; $("kill").disabled = true; tickProcs(); }
+  catch (e) { alert(e.message); }
+};
+
+// ---------- Sistema ----------
+async function loadInfo() {
+  const i = await api("/api/system/info");
+  const rows = [
+    ["Nome do PC", i.hostname], ["Usuário", i.user], ["Sistema", i.osName || i.os], ["Arquitetura", i.arch],
+    ["Processador", i.cpu], ["Núcleos lógicos", i.cores], ["Clock base", i.speedMHz ? `${(i.speedMHz / 1000).toFixed(2)} GHz` : "—"],
+    ["Memória RAM", bytes(i.memory)], ["Placa-mãe", i.board],
+    ...i.gpus.map((g, n) => [`Vídeo ${i.gpus.length > 1 ? n + 1 : ""}`, `${g.name}${g.vram > 0 ? ` (${bytes(g.vram)})` : ""}`]),
+    ["Node.js", i.node],
+  ].filter(([, v]) => v);
+  $("info").innerHTML = rows.map(([k, v]) => `<span>${k}:</span><b>${esc(v)}</b>`).join("");
+  $("nets").innerHTML = i.networks.map(n => `<tr><td>${esc(n.name)}</td><td class="mono">${esc(n.address)}</td><td class="mono">${esc(n.mac)}</td></tr>`).join("");
+}
+
+// ---------- Abas e ciclo de atualização ----------
+let tab = "desempenho";
+document.querySelectorAll("#tabs li").forEach(li => li.onclick = e => {
+  e.preventDefault();
+  tab = li.querySelector("a").hash.slice(1);
+  document.querySelectorAll("#tabs li").forEach(x => x.setAttribute("aria-selected", x === li));
+  document.querySelectorAll("section").forEach(s => s.hidden = s.id !== tab);
+  if (tab === "processos") tickProcs();
+  if (tab === "sistema") loadInfo();
+});
+tickPerf();
+setInterval(() => { if (!document.hidden) tickPerf(); }, 1500);
+setInterval(() => { if (!document.hidden && tab === "processos") tickProcs(); }, 3000);
+</script>
+</body></html>

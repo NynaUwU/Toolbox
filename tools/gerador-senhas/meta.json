@@ -1,1 +1,0 @@
-{ "title": "Gerador de senhas", "description": "Senhas fortes geradas localmente com crypto.getRandomValues.", "icon": "🔐",   "order": 20 }
