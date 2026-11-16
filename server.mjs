@@ -209,16 +209,31 @@ app.get("/api/files", (req, res) => {
   res.download(full);
 });
 
+/** Abre a pasta no gerenciador de arquivos; com select=true, abre a pasta do arquivo já com ele destacado. */
+function explorerArgs(target, select) {
+  // O Explorer só entende  /select,"C:\caminho\arquivo"  — se o Node puser aspas no argumento
+  // inteiro ("/select,C:\…", o que acontece quando há espaços), ele ignora e abre “Documentos”.
+  const win = path.win32.normalize(target);
+  return select ? `/select,"${win}"` : `"${win}"`;
+}
 function openInExplorer(target, select) {
-  const cmd = IS_WIN ? "explorer.exe" : process.platform === "darwin" ? "open" : "xdg-open";
-  const args = IS_WIN && select ? [`/select,${target}`] : process.platform === "darwin" && select ? ["-R", target] : [select ? path.dirname(target) : target];
-  spawn(cmd, args, { detached: true, stdio: "ignore", windowsHide: false }).on("error", () => {}).unref();
+  if (IS_WIN) {
+    spawn("explorer.exe", [explorerArgs(target, select)], { windowsVerbatimArguments: true, detached: true, stdio: "ignore" })
+      .on("error", () => {}).unref();
+    return;
+  }
+  const [cmd, args] = process.platform === "darwin"
+    ? ["open", select ? ["-R", target] : [target]]
+    : ["xdg-open", [select ? path.dirname(target) : target]];
+  spawn(cmd, args, { detached: true, stdio: "ignore" }).on("error", () => {}).unref();
 }
 
 app.post("/api/open-folder", (req, res) => {
   const f = req.body?.f;
   const full = f ? insideDir(OUTPUT, f) : null;
-  openInExplorer(full && fs.existsSync(full) ? full : OUTPUT, Boolean(full));
+  if (full && fs.existsSync(full)) openInExplorer(full, true);          // destaca o arquivo
+  else if (full && fs.existsSync(path.dirname(full))) openInExplorer(path.dirname(full), false); // arquivo sumiu: abre a pasta dele
+  else openInExplorer(OUTPUT, false);
   res.json({ ok: true });
 });
 
