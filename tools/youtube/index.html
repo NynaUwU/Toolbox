@@ -2,15 +2,34 @@
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>YouTube Downloader</title>
 <link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/table98.js" defer></script>
+<style>
+  #urls { width: 100%; min-height: 96px; resize: vertical; font-family: "Courier New", monospace; font-size: 12px; white-space: pre; }
+  #queueInfo { margin-left: auto; }
+  /* janela da playlist */
+  #plBack { position: fixed; inset: 0; background: rgba(0, 0, 0, .35); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 12px; }
+  #plWin { width: min(760px, 100%); max-height: 100%; display: flex; flex-direction: column; }
+  #plWin .window-body { display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow: hidden; }
+  #plList { flex: 1; overflow: auto; min-height: 120px; max-height: 55vh; }
+  #plList table { width: 100%; }
+  #plList td { padding: 2px 6px; }
+  #plList td.n { width: 34px; text-align: right; color: #555; font-family: "Courier New", monospace; }
+  #plList td.d { width: 60px; text-align: right; font-family: "Courier New", monospace; }
+  #plList td.c { width: 22px; }
+  #plList input { margin: 0; position: static; opacity: 1; width: 13px; height: 13px; appearance: auto; -webkit-appearance: checkbox; }
+  #plList tr.off td:not(.c) { color: #999; text-decoration: line-through; }
+  #plList tr.cur td { font-weight: bold; }
+</style>
 </head><body>
 <form id="form" class="stack">
   <fieldset>
-    <legend>Link</legend>
-    <div class="row">
-      <input id="url" type="url" class="grow" placeholder="https://www.youtube.com/watch?v=…" required autofocus>
-      <button type="button" id="paste">Colar</button>
+    <legend>Links — um por linha</legend>
+    <textarea id="urls" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…&#10;https://youtu.be/…&#10;https://www.youtube.com/playlist?list=…"></textarea>
+    <div class="row" style="margin-top:6px">
+      <button type="button" id="paste">📋 Colar</button>
+      <button type="button" id="clear">Limpar</button>
+      <span id="count" class="muted"></span>
     </div>
-    <p class="muted">Funciona também com playlists e outros sites suportados pelo yt-dlp (Instagram, TikTok, SoundCloud, X…).</p>
+    <p class="muted">Playlists abrem uma janela para escolher os vídeos. Também funciona com Instagram, TikTok, SoundCloud, X e outros sites suportados pelo yt-dlp.</p>
   </fieldset>
 
   <fieldset>
@@ -31,7 +50,8 @@
         <label for="quality">Resolução máx.:</label>
         <select id="quality"><option value="best">Melhor</option><option value="2160">4K</option><option value="1440">1440p</option><option value="1080" selected>1080p</option><option value="720">720p</option><option value="480">480p</option><option value="360">360p</option></select>
       </div>
-      <div class="field-row"><input type="checkbox" id="playlist"><label for="playlist">Baixar playlist inteira</label></div>
+      <div class="field-row"><label for="parallel">Simultâneos:</label>
+        <select id="parallel"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></div>
     </div>
   </fieldset>
 
@@ -43,19 +63,49 @@
   </div>
   <p id="msg"></p>
 </form>
-<div id="jobs" style="margin-top:10px"></div>
+<div class="row"><b>Fila</b><span id="queueInfo" class="muted"></span><button type="button" id="cancelQ" hidden>Cancelar pendentes</button></div>
+<div id="jobs" style="margin-top:6px"></div>
+
+<!-- Janela de seleção da playlist -->
+<div id="plBack" hidden>
+  <div class="window" id="plWin" role="dialog" aria-modal="true" aria-labelledby="plTitle">
+    <div class="title-bar">
+      <div class="title-bar-text" id="plTitle">Playlist</div>
+      <div class="title-bar-controls"><button aria-label="Close" id="plClose"></button></div>
+    </div>
+    <div class="window-body">
+      <p id="plSub" class="muted"></p>
+      <div class="row">
+        <input id="plFilter" type="text" placeholder="Filtrar por título…" class="grow">
+        <button type="button" id="plAll">Marcar todos</button>
+        <button type="button" id="plNone">Desmarcar</button>
+        <button type="button" id="plInv">Inverter</button>
+      </div>
+      <div class="sunken-panel" id="plList"><table class="interactive"><tbody id="plRows"></tbody></table></div>
+      <div class="row">
+        <div class="field-row"><input type="checkbox" id="plFolder" checked><label for="plFolder">Salvar numa pasta com o nome da playlist (numerados)</label></div>
+      </div>
+      <div class="row">
+        <span id="plCount" class="muted"></span><span class="grow"></span>
+        <button type="button" class="default" id="plOk">⬇ Baixar selecionados</button>
+        <button type="button" id="plCancel">Pular esta playlist</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script type="module">
-import { post, trackJob, openOutput } from "/assets/jobs98.js";
+import { api, post, trackJob, openOutput } from "/assets/jobs98.js";
 const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = () => document.querySelector("input[name=format]:checked").value;
+const dur = s => s ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}` : "";
 
+// ---------- Opções ----------
 document.querySelectorAll("input[name=format]").forEach(r => r.onchange = () => {
-  const video = ["mp4", "webm"].includes(fmt());
-  $("opt-quality").hidden = !video;
+  $("opt-quality").hidden = !["mp4", "webm"].includes(fmt());
   $("opt-bitrate").hidden = fmt() !== "mp3";
 });
-$("paste").onclick = async () => { try { $("url").value = (await navigator.clipboard.readText()).trim(); } catch { $("url").focus(); } };
 $("folder").onclick = openOutput;
 $("upd").onclick = async () => {
   $("upd").disabled = true; $("msg").textContent = "Atualizando yt-dlp…";
@@ -64,19 +114,122 @@ $("upd").onclick = async () => {
   $("upd").disabled = false;
 };
 
+// ---------- Links ----------
+const parseLinks = () => [...new Set($("urls").value.split(/[\s,;]+/).map(s => s.trim()).filter(s => /^https?:\/\/\S+$/i.test(s)))];
+const countLinks = () => { const n = parseLinks().length; $("count").textContent = n ? `${n} link${n > 1 ? "s" : ""}` : ""; };
+$("urls").addEventListener("input", countLinks);
+$("paste").onclick = async () => {
+  try {
+    const t = (await navigator.clipboard.readText()).trim();
+    if (t) $("urls").value = ($("urls").value.trim() ? $("urls").value.trimEnd() + "\n" : "") + t + "\n";
+    countLinks();
+  } catch { $("urls").focus(); }
+};
+$("clear").onclick = () => { $("urls").value = ""; countLinks(); };
+
+/** Parece playlist? (YouTube list=, /playlist, SoundCloud sets, álbuns, canais) */
+function playlistKind(u) {
+  try {
+    const url = new URL(u);
+    if (/youtube\.com|youtu\.be/.test(url.hostname)) {
+      if (url.pathname.startsWith("/playlist")) return "full";
+      if (url.searchParams.get("list")) return "video-in-list";
+      if (/^\/(@[^/]+|channel\/|c\/|user\/)/.test(url.pathname) && !url.pathname.includes("/shorts/")) return "full";
+      return null;
+    }
+    if (/\/sets\/|\/album\/|\/playlist/i.test(url.pathname)) return "full";
+  } catch {}
+  return null;
+}
+
+// ---------- Janela da playlist ----------
+function choosePlaylist(info, preselectId) {
+  return new Promise(resolve => {
+    $("plTitle").textContent = `📃 ${info.title}`;
+    $("plSub").textContent = `${info.count} itens${info.uploader ? " · " + info.uploader : ""}` + (preselectId ? " · o link era de um vídeo dentro desta playlist: só ele veio marcado" : "");
+    $("plRows").innerHTML = info.entries.map(e => `<tr data-i="${e.index}" class="${e.id === preselectId ? "cur" : ""}">
+      <td class="c"><input type="checkbox" ${(!preselectId || e.id === preselectId) && !e.unavailable ? "checked" : ""} ${e.unavailable ? "disabled" : ""}></td>
+      <td class="n">${e.index}</td><td>${esc(e.title)}</td><td class="d">${dur(e.duration)}</td></tr>`).join("");
+    $("plFilter").value = "";
+    const rows = () => [...$("plRows").querySelectorAll("tr")];
+    const visible = () => rows().filter(r => !r.hidden);
+    const sync = () => {
+      rows().forEach(r => r.classList.toggle("off", !r.querySelector("input").checked));
+      const n = rows().filter(r => r.querySelector("input").checked).length;
+      $("plCount").textContent = `${n} de ${info.count} selecionados`;
+      $("plOk").disabled = !n;
+    };
+    // clique em qualquer parte da linha marca/desmarca
+    $("plRows").onclick = e => {
+      const tr = e.target.closest("tr"); if (!tr) return;
+      const cb = tr.querySelector("input"); if (cb.disabled) return;
+      if (e.target !== cb) cb.checked = !cb.checked;
+      sync();
+    };
+    const setAll = f => { visible().forEach(r => { const cb = r.querySelector("input"); if (!cb.disabled) cb.checked = f(cb.checked); }); sync(); };
+    $("plAll").onclick = () => setAll(() => true);
+    $("plNone").onclick = () => setAll(() => false);
+    $("plInv").onclick = () => setAll(v => !v);
+    $("plFilter").oninput = () => { const q = $("plFilter").value.toLowerCase(); rows().forEach(r => r.hidden = q && !r.textContent.toLowerCase().includes(q)); };
+    const done = val => { $("plBack").hidden = true; document.removeEventListener("keydown", onKey); resolve(val); };
+    const onKey = e => { if (e.key === "Escape") done(null); };
+    document.addEventListener("keydown", onKey);
+    $("plOk").onclick = () => done({ entries: info.entries.filter((e, i) => rows()[i].querySelector("input").checked), folder: $("plFolder").checked ? info.title : "" });
+    $("plCancel").onclick = $("plClose").onclick = () => done(null);
+    $("plBack").hidden = false; sync(); $("plOk").focus();
+  });
+}
+
+// ---------- Fila de downloads ----------
+const queue = []; let running = 0;
+function updQueue() {
+  $("queueInfo").textContent = queue.length || running ? `${running} baixando · ${queue.length} na fila` : "";
+  $("cancelQ").hidden = !queue.length;
+}
+function enqueue(item) { queue.push(item); updQueue(); pump(); }
+function pump() {
+  while (running < +$("parallel").value && queue.length) {
+    const it = queue.shift(); running++; updQueue();
+    (async () => {
+      try {
+        const { id } = await post("/api/youtube", it.body);
+        await trackJob($("jobs"), id, it.label);
+      } catch (e) {
+        const f = document.createElement("fieldset"); f.className = "job";
+        f.innerHTML = `<legend>${esc(it.label)}</legend><span class="error">✖ ${esc(e.message)}</span>`; $("jobs").prepend(f);
+      }
+      running--; updQueue(); pump();
+    })();
+  }
+}
+$("cancelQ").onclick = () => { queue.length = 0; updQueue(); };
+
 $("form").onsubmit = async e => {
   e.preventDefault();
-  $("msg").textContent = "";
-  const url = $("url").value.trim();
-  try {
-    const { id } = await post("/api/youtube", {
-      url, format: fmt(), quality: $("quality").value, bitrate: $("bitrate").value, playlist: $("playlist").checked,
-    });
-    $("url").value = "";
-    trackJob($("jobs"), id, `${fmt().toUpperCase()} · ${url}`);
-  } catch (err) {
-    $("msg").innerHTML = `<span class="error">✖ ${err.message}</span>`;
+  const links = parseLinks();
+  if (!links.length) { $("msg").innerHTML = '<span class="error">Cole pelo menos um link.</span>'; return; }
+  $("msg").textContent = ""; $("go").disabled = true;
+  const opts = { format: fmt(), quality: $("quality").value, bitrate: $("bitrate").value };
+  const tag = opts.format.toUpperCase();
+  const seen = new Set(); // evita baixar o mesmo vídeo duas vezes na mesma leva
+  const add = (url, item) => { const k = url.replace(/[&?]list=[^&]*/, ""); if (seen.has(k)) return; seen.add(k); enqueue(item); };
+  for (const url of links) {
+    const kind = playlistKind(url);
+    if (!kind) { add(url, { body: { url, ...opts }, label: `${tag} · ${url}` }); continue; }
+    $("msg").textContent = `Lendo a playlist… (${url})`;
+    let info;
+    try { info = await post("/api/youtube/playlist", { url }); }
+    catch (err) { $("msg").innerHTML = `<span class="error">✖ ${esc(err.message)}</span>`; continue; }
+    if (info.single) { add(url, { body: { url, ...opts }, label: `${tag} · ${info.title || url}` }); continue; }
+    $("msg").textContent = "";
+    const preselect = kind === "video-in-list" ? new URL(url).searchParams.get("v") : null;
+    const pick = await choosePlaylist(info, preselect);
+    if (!pick) continue;
+    for (const ent of pick.entries) {
+      add(ent.url, { body: { url: ent.url, ...opts, folder: pick.folder, index: pick.folder ? ent.index : 0 }, label: `${tag} · ${ent.index}. ${ent.title}` });
+    }
   }
+  $("urls").value = ""; countLinks(); $("go").disabled = false; $("msg").textContent = "";
 };
 </script>
 </body></html>

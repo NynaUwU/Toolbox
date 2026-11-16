@@ -8,7 +8,7 @@ Central pessoal de ferramentas que roda **só no seu computador** (http://localh
 |---|---|---|
 | 🎨 Editor de imagens | Recorte (com proporções), pincel com 6 pontas (redonda, suave, quadrada, caligrafia, marca-texto, spray) e opacidade, borracha, conta-gotas, borrar/pixelar (pincel ou área), retângulos e círculos (vazados ou cheios), imagem por cima (mover/redimensionar/opacidade), girar, espelhar, redimensionar, desfazer | navegador |
 | 🎬 Editor de vídeo | Linha do tempo com trechos (manter ou remover), recorte de área (16:9, 9:16, 1:1…), girar, reduzir, tirar áudio, salvar quadro como imagem; exporta MP4, WEBM, GIF ou MP3 | ffmpeg |
-| 📼 YouTube Downloader | Vídeo/playlist → MP3, M4A, WAV, MP4, WEBM | yt-dlp + ffmpeg |
+| 📼 YouTube Downloader | Vários links (um por linha) em fila; playlists abrem uma janela para escolher os vídeos → MP3, M4A, WAV, MP4, WEBM | yt-dlp + ffmpeg |
 | 🔁 Conversor de arquivos | Word ↔ PDF, vídeo ↔ áudio, GIF ↔ vídeo, PNG/JPG/WEBP/BMP/TIFF/ICO, planilhas, apresentações | ffmpeg + Office ou LibreOffice portátil |
 | 📏 Conversor de unidades | Peso, comprimento, temperatura, volume, área, velocidade, pressão, energia, potência, tempo, dados, ângulo, torque | — |
 | 💱 Conversor de moedas | 160+ moedas, guarda a última cotação para uso offline | open.er-api.com / Frankfurter |

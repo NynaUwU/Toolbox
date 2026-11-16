@@ -7,7 +7,7 @@ import { spawn, execFile } from "node:child_process";
 import { ROOT, OUTPUT, TMP, DATA, IS_WIN, findTool, insideDir, safeName, uniquePath } from "./lib/paths.mjs";
 import { createJob, getJob, listJobs, finishJob, hasRunning } from "./lib/jobs.mjs";
 import { GROUPS, groupFor, convert } from "./lib/convert.mjs";
-import { download, FORMATS } from "./lib/youtube.mjs";
+import { download, FORMATS, listPlaylist } from "./lib/youtube.mjs";
 import * as updater from "./lib/updater.mjs";
 import { detectOffice } from "./lib/office.mjs";
 import { installLibreOfficePortable } from "./lib/installer.mjs";
@@ -118,6 +118,10 @@ app.get("/api/jobs/:id", (req, res) => {
 
 // ---------- YouTube ----------
 app.get("/api/youtube/formats", (req, res) => res.json(FORMATS));
+app.post("/api/youtube/playlist", async (req, res) => {
+  try { res.json(await listPlaylist(String(req.body?.url || ""))); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
 app.post("/api/youtube", (req, res) => {
   const { url } = req.body || {};
   if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: "Informe uma URL válida." });
