@@ -1,1 +1,7 @@
-{ "title": "Contador de texto", "description": "Conta caracteres, palavras, linhas e tempo de leitura.", "icon": "🔢",   "order": 20 }
+{
+  "title": "Contador de texto",
+  "description": "Conta caracteres, palavras, linhas e tempo de leitura.",
+  "icon": "🔢",
+  "order": 1,
+  "category": "Utilitários"
+}

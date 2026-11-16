@@ -1,7 +1,15 @@
 // Toolbox — navegação, status e atualizações
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const GROUPS = [["tool", "Ferramentas"], ["site", "Meus sites"], ["link", "Atalhos"]];
+// Ordem e ícones das categorias (categorias novas vindas do meta.json entram no fim)
+const CATEGORY_ORDER = ["Eletrônica", "Mídia e arquivos", "Conversores", "Sistema e rede", "Utilitários", "Outras ferramentas", "Meus sites", "Atalhos"];
+const CATEGORY_ICON = { "Eletrônica": "⚡", "Mídia e arquivos": "🎞️", "Conversores": "🔄", "Sistema e rede": "🖥️", "Utilitários": "🧩", "Outras ferramentas": "🛠️", "Meus sites": "🌐", "Atalhos": "🔗" };
+function categories(list) {
+  const names = [...new Set(list.map(i => i.category))];
+  const rank = c => (CATEGORY_ORDER.indexOf(c) + 1) || 99;
+  return names.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b, "pt-BR"))
+    .map(c => [c, list.filter(i => i.category === c).sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, "pt-BR"))]);
+}
 
 let items = [];
 let lastVersion = null;
@@ -34,10 +42,8 @@ function renderNav() {
   const q = $("#search").value.trim().toLowerCase();
   const match = i => !q || `${i.title} ${i.description}`.toLowerCase().includes(q);
   const current = location.hash.slice(1);
-  $("#nav").innerHTML = GROUPS.map(([kind, label]) => {
-    const list = items.filter(i => i.kind === kind && match(i));
-    if (!list.length) return "";
-    return `<h3>${label}</h3>` + list.map(i =>
+  $("#nav").innerHTML = categories(items.filter(match)).map(([label, list]) => {
+    return `<h3>${CATEGORY_ICON[label] || "📁"} ${esc(label)}</h3>` + list.map(i =>
       `<a href="${href(i)}" ${attrs(i)}
           class="${current === i.url ? "active" : ""}" title="${esc(i.description)}">
         <span class="ico">${esc(i.icon)}</span>${esc(i.title)}${i.external ? " ↗" : i.window ? " ⧉" : ""}</a>`).join("");
@@ -46,10 +52,8 @@ function renderNav() {
 
 function renderHome() {
   $("#main-title").textContent = "Início";
-  $("#main-body").innerHTML = `<div class="home">` + GROUPS.map(([kind, label]) => {
-    const list = items.filter(i => i.kind === kind);
-    if (!list.length) return "";
-    return `<h2>${label}</h2><div class="tiles">` + list.map(i =>
+  $("#main-body").innerHTML = `<div class="home">` + categories(items).map(([label, list]) => {
+    return `<h2>${CATEGORY_ICON[label] || "📁"} ${esc(label)}</h2><div class="tiles">` + list.map(i =>
       `<a class="tile" href="${href(i)}" ${attrs(i)}>
         <span class="ico">${esc(i.icon)}</span><b>${esc(i.title)}${i.external ? " ↗" : i.window ? " ⧉" : ""}</b>
         <span class="desc">${esc(i.description)}</span></a>`).join("") + `</div>`;

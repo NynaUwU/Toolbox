@@ -39,7 +39,7 @@
 <div class="sunken-panel" style="max-height:calc(100vh - 190px);overflow:auto">
   <table class="interactive" id="devs" style="width:100%">
     <thead><tr><th data-k="ip">IP ▲</th><th data-k="hostname">Nome</th><th data-k="vendor">Fabricante</th><th data-k="mac">MAC</th></tr></thead>
-    <tbody id="list"><tr><td colspan="4" class="muted">Clique em “Procurar aparelhos”.</td></tr></tbody>
+    <tbody id="list"><tr><td colspan="4" class="muted">Procurando aparelhos…</td></tr></tbody>
   </table>
 </div>
 <p class="muted">Aparelhos em modo de economia (celulares com tela apagada) podem não responder na hora — rode de novo se faltar algum. O <span style="color:#008000">●</span> marca aparelhos que não estavam na varredura anterior.</p>
@@ -87,6 +87,18 @@ function render() {
     || '<tr><td colspan="4" class="muted">Nada encontrado.</td></tr>';
 }
 
+// Ao abrir a página: mostra a última varredura (se houver) e já começa uma nova
+async function autoStart() {
+  try {
+    const last = await api("/api/network/last");
+    if (last.result) {
+      result = last.result; render();
+      $("msg").textContent = `Resultado anterior (${new Date(result.scannedAt).toLocaleTimeString("pt-BR")}) — atualizando…`;
+    }
+    $("scan").click();
+  } catch {}
+}
+
 $("scan").onclick = async () => {
   $("scan").disabled = true; $("bar").hidden = false; $("msg").textContent = "Procurando…";
   const { id } = await post("/api/network/scan", { address: $("iface").value, bits: $("bits").value });
@@ -118,5 +130,6 @@ $("copy").onclick = () => {
   const txt = result.devices.map(d => [d.ip, d.hostname || "", d.vendor || "", d.mac || ""].join("\t")).join("\n");
   navigator.clipboard.writeText("IP\tNome\tFabricante\tMAC\n" + txt).then(() => $("msg").textContent = "Lista copiada!");
 };
+autoStart();
 </script>
 </body></html>

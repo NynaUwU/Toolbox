@@ -1,1 +1,7 @@
-{ "title": "Simulador de circuitos", "description": "Simulador CircuitJS (Falstad) + calculadoras: Ohm, divisor, LED, código de cores, RC, 555, LC, bobinas.", "icon": "🔬", "order": 3 }
+{
+  "title": "Simulador de circuitos",
+  "description": "Simulador CircuitJS (Falstad) + calculadoras: Ohm, divisor, LED, código de cores, RC, 555, LC, bobinas.",
+  "icon": "🔬",
+  "order": 1,
+  "category": "Eletrônica"
+}

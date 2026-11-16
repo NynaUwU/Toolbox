@@ -1,1 +1,10 @@
-{ "title": "Guia visual de eletrônica e elétrica", "description": "46 páginas interativas, 72 projetos e 37 calculadoras — de Lei de Ohm a rádio, motores e instalações.", "icon": "📘", "order": 1, "window": true, "width": 1180, "height": 860 }
+{
+  "title": "Guia visual de eletrônica e elétrica",
+  "description": "46 páginas interativas, 72 projetos e 37 calculadoras — de Lei de Ohm a rádio, motores e instalações.",
+  "icon": "📘",
+  "order": 2,
+  "window": true,
+  "width": 1180,
+  "height": 860,
+  "category": "Eletrônica"
+}

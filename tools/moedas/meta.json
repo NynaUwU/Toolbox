@@ -1,1 +1,7 @@
-{ "title": "Conversor de moedas", "description": "Cotações atualizadas de 160+ moedas (funciona offline com a última cotação).", "icon": "💱", "order": 4 }
+{
+  "title": "Conversor de moedas",
+  "description": "Cotações atualizadas de 160+ moedas (funciona offline com a última cotação).",
+  "icon": "💱",
+  "order": 2,
+  "category": "Conversores"
+}

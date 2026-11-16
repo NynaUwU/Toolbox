@@ -58,6 +58,7 @@ app.get("/api/catalog", (req, res) => {
         icon: meta.icon || (kind === "tool" ? "🛠️" : "🌐"),
         width: meta.width, height: meta.height,
         window: Boolean(meta.window), // abre em janela separada do navegador
+        category: meta.category || (kind === "site" ? "Meus sites" : "Outras ferramentas"),
         order: meta.order ?? 100,
         url: `/${dir}/${slug}/`,
       });
@@ -65,7 +66,7 @@ app.get("/api/catalog", (req, res) => {
   }
   for (const l of readJson(path.join(ROOT, "links.json"), [])) {
     items.push({ kind: "link", slug: l.slug || l.url, title: l.title, description: l.description || "",
-      icon: l.icon || "🔗", url: l.url, order: l.order ?? 100, external: /^https?:/.test(l.url) });
+      icon: l.icon || "🔗", url: l.url, order: l.order ?? 100, external: /^https?:/.test(l.url), category: l.category || "Atalhos" });
   }
   items.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, "pt-BR"));
   res.json({ items });
@@ -241,14 +242,17 @@ app.post("/api/system/sensors/lhm", (req, res) => {
 });
 
 // ---------- Dispositivos na rede ----------
+let lastScan = null;
 app.get("/api/network/interfaces", (req, res) => res.json(net.localNetworks()));
+app.get("/api/network/last", (req, res) => res.json({ result: lastScan,
+  running: listJobs().find(j => j.type === "netscan" && j.status === "running")?.id || null }));
 app.post("/api/network/scan", (req, res) => {
   const running = listJobs().find(j => j.type === "netscan" && j.status === "running");
   if (running) return res.json({ id: running.id });
   const job = createJob("netscan", "Varredura da rede");
   job.stage = "Procurando aparelhos…";
   net.scan({ address: req.body?.address, bits: req.body?.bits || "auto", onProgress: (p, msg) => { job.progress = p; if (msg) job.stage = msg; } })
-    .then(r => { job.result = r; finishJob(job); }, err => finishJob(job, err));
+    .then(r => { job.result = r; lastScan = r; finishJob(job); }, err => finishJob(job, err));
   res.json({ id: job.id });
 });
 

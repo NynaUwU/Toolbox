@@ -1,1 +1,7 @@
-{ "title": "Dispositivos na rede", "description": "Lista os IPs, MACs, nomes e fabricantes dos aparelhos conectados à sua rede.", "icon": "📡", "order": 7 }
+{
+  "title": "Dispositivos na rede",
+  "description": "Lista os IPs, MACs, nomes e fabricantes dos aparelhos conectados à sua rede.",
+  "icon": "📡",
+  "order": 2,
+  "category": "Sistema e rede"
+}

@@ -52,10 +52,10 @@ Para iniciar junto com o Windows: `Win + R` → `shell:startup` → cole ali um 
 - **Atalho externo:** uma entrada em `links.json`
 
 ```json
-{ "title": "Nome", "description": "O que faz", "icon": "⚡", "order": 10 }
+{ "title": "Nome", "description": "O que faz", "icon": "⚡", "category": "Eletrônica", "order": 10 }
 ```
 
-Aparecem sozinhos no menu — sem build. Use `"hidden": true` para ocultar e `"window": true` para abrir em janela separada (com `"width"`/`"height"`).
+Aparecem sozinhos no menu, agrupados pela `category` (Eletrônica, Mídia e arquivos, Conversores, Sistema e rede, Utilitários… ou uma nova) — sem build. Use `"hidden": true` para ocultar e `"window": true` para abrir em janela separada (com `"width"`/`"height"`).
 
 ## Estrutura
 

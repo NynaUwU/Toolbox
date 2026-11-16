@@ -1,1 +1,7 @@
-{ "title": "Bitolas de fio", "description": "AWG ↔ mm² ↔ diâmetro, bitolas comerciais e capacidade de corrente (NBR 5410).", "icon": "🔌", "order": 5 }
+{
+  "title": "Bitolas de fio",
+  "description": "AWG ↔ mm² ↔ diâmetro, bitolas comerciais e capacidade de corrente (NBR 5410).",
+  "icon": "🔌",
+  "order": 3,
+  "category": "Eletrônica"
+}

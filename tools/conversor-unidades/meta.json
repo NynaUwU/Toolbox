@@ -1,1 +1,7 @@
-{ "title": "Conversor de unidades", "description": "Peso, comprimento, temperatura, volume, área, velocidade, pressão, energia, dados…", "icon": "📏", "order": 3 }
+{
+  "title": "Conversor de unidades",
+  "description": "Peso, comprimento, temperatura, volume, área, velocidade, pressão, energia, dados…",
+  "icon": "📏",
+  "order": 1,
+  "category": "Conversores"
+}
