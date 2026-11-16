@@ -22,20 +22,20 @@ Central pessoal de ferramentas que roda **só no seu computador** (http://localh
 
 Em todas as tabelas: **clique numa linha para destacá-la** (Ctrl+clique marca várias, Esc limpa).
 
-Tudo o que a Toolbox grava fica em **`Output\`**, dentro da própria pasta: `YouTube\`, `Convertidos\`, `Imagens\`, `Vídeos\`, `Áudios\` — e `Output\_sistema\` guarda as ferramentas portáteis (Node, yt-dlp, ffmpeg…), configurações e temporários. Nada é gravado na raiz do programa.
+Seus arquivos ficam em **`Output\`**, dentro da própria pasta: `YouTube\`, `Convertidos\`, `Imagens\`, `Vídeos\`, `Áudios\`. As ferramentas portáteis e dados internos ficam na raiz do programa: `runtime\` (Node, LibreOffice…), `bin\` (yt-dlp, ffmpeg), `data\` (configurações) e `tmp\`.
 
 ## Instalação (Windows) — sem instalar nada
 
 1. No GitHub: **Code → Download ZIP** e extraia onde quiser (ex.: `Documentos\Toolbox`).
 2. Dê dois cliques em **`Toolbox.bat`**. Na primeira vez ele baixa, **para dentro da própria pasta**:
-   - **Node.js portátil** → `Output\_sistema\runtime\node` (~30 MB)
-   - **yt-dlp** e **ffmpeg** → `Output\_sistema\bin\` (~150 MB)
+   - **Node.js portátil** → `runtime\node` (~30 MB)
+   - **yt-dlp** e **ffmpeg** → `bin\` (~150 MB)
 
 Nada vai para o Windows: sem instalador, sem winget, sem admin, sem registro. Para desinstalar, apague a pasta.
 
 **Documentos (Word/PDF/planilhas):**
 - Se o PC já tem **Microsoft Office**, ele é usado automaticamente.
-- Senão, o Conversor oferece **“Baixar LibreOffice portátil”**: o `.msi` oficial é só *extraído* (com o lessmsi, também portátil) para `Output\_sistema\runtime\libreoffice`, sem executar instalador.
+- Senão, o Conversor oferece **“Baixar LibreOffice portátil”**: o `.msi` oficial é só *extraído* (com o lessmsi, também portátil) para `runtime\libreoffice`, sem executar instalador.
 
 Para abrir sem a janela preta na frente, use **`Toolbox (minimizado).vbs`**.
 Para iniciar junto com o Windows: `Win + R` → `shell:startup` → cole ali um atalho do `.vbs`.
@@ -43,7 +43,7 @@ Para iniciar junto com o Windows: `Win + R` → `shell:startup` → cole ali um 
 ## Atualizações automáticas (sem git)
 
 - Ao iniciar e a cada 30 min, a Toolbox consulta o GitHub. Se houver commit novo e nenhuma tarefa rodando, baixa o zip, substitui os arquivos e reinicia (a página recarrega sozinha).
-- Nunca toca na pasta `Output\`.
+- Nunca toca em `Output\`, `runtime\`, `bin\` e `data\`.
 - Manual: botão **🔍 Procurar atualizações** no topo (ou clique na versão na barra de status).
 - O yt-dlp se atualiza 1x por dia.
 - Repositório configurado em `package.json` → `"toolbox": { "repo", "branch" }`.
@@ -70,5 +70,6 @@ scripts/               get-node.ps1 (Node portátil), setup.mjs (yt-dlp, ffmpeg)
 public/                interface principal
 tools/  sites/         conteúdo (cada pasta = um item)
 node_modules/          dependências já incluídas (dispensa npm)
-Output/                tudo que a Toolbox grava (arquivos + _sistema/), fora do git
+Output/                seus arquivos (fora do git)
+runtime/ bin/ data/    ferramentas portáteis e dados internos (fora do git)
 ```
