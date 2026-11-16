@@ -1,0 +1,45 @@
+/* Base compartilhada pelas ferramentas (complementa o 98.css) */
+html, body { height: 100%; }
+body {
+  margin: 0;
+  padding: 8px;
+  box-sizing: border-box;
+  background: #c0c0c0;
+  font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
+  font-size: 11px;
+  color: #000;
+}
+* { box-sizing: border-box; }
+fieldset { margin: 0 0 10px; }
+h1 { font-size: 13px; margin: 0 0 8px; }
+p { margin: 4px 0; }
+.stack > * + * { margin-top: 8px; }
+.row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.row > .grow { flex: 1 1 160px; min-width: 0; }
+input[type=text], input[type=number], input[type=url], select, textarea { font-family: inherit; }
+input.wide, select.wide, textarea.wide { width: 100%; }
+.mono { font-family: "Courier New", Courier, monospace; font-size: 12px; }
+.big { font-size: 20px; font-weight: bold; }
+.muted { color: #555; }
+.error { color: #a00000; }
+.ok { color: #006400; }
+.sunken-panel { background: #fff; padding: 4px; }
+.sunken-panel table { width: 100%; }
+table.interactive td, table.interactive th { padding: 2px 6px; }
+.dropzone {
+  border: 2px dashed #808080; background: #fff; padding: 18px; text-align: center; cursor: pointer;
+}
+.dropzone.over { background: #000080; color: #fff; border-color: #fff; }
+.progress-indicator { width: 100%; }
+.progress-indicator.indeterminate .progress-indicator-bar {
+  width: 30% !important; animation: marquee 1.2s linear infinite;
+}
+@keyframes marquee { from { margin-left: -30%; } to { margin-left: 100%; } }
+.job { margin-bottom: 8px; }
+.job .stage { margin: 4px 0; overflow-wrap: anywhere; }
+.job .files a { display: inline-block; margin-right: 8px; }
+.log { max-height: 90px; overflow: auto; white-space: pre-wrap; font-size: 11px; background: #fff; padding: 4px; }
+button.link { all: unset; color: #0000ee; text-decoration: underline; cursor: pointer; }
+[hidden] { display: none !important; }
+.dropzone { display: block; }
+.dropzone > * { display: block; margin: 2px 0; }

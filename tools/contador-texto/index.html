@@ -1,18 +1,17 @@
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="../../assets/tool.css">
-<title>Contador de texto</title></head><body><main>
-<a class="back" href="../../">← Toolbox</a>
-<h1>🔢 Contador de texto</h1><p class="lead">Estatísticas atualizadas enquanto você digita.</p>
-<div class="card"><textarea id="txt" placeholder="Digite ou cole seu texto…"></textarea></div>
-<div class="card row mono" id="stats"></div>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css">
+<title>Contador de texto</title>
+<style>body{display:flex;flex-direction:column;gap:8px} textarea{flex:1;min-height:200px;resize:none} .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:6px}</style></head><body>
+<textarea id="txt" class="wide" placeholder="Digite ou cole seu texto…"></textarea>
+<div class="stats" id="stats"></div>
 <script>
 const t = document.getElementById("txt"), s = document.getElementById("stats");
 function upd() {
   const v = t.value, words = (v.match(/\S+/g) || []).length;
   const data = { "Caracteres": [...v].length, "Sem espaços": [...v.replace(/\s/g, "")].length, "Palavras": words,
-    "Linhas": v ? v.split("\n").length : 0, "Leitura": Math.max(0, Math.ceil(words / 200)) + " min" };
-  s.innerHTML = Object.entries(data).map(([k, n]) => '<div><div class="status">' + k + '</div><b style="font-size:22px">' + n + '</b></div>').join("");
+    "Linhas": v ? v.split("\n").length : 0, "Parágrafos": v.split(/\n\s*\n/).filter(p => p.trim()).length, "Leitura": Math.ceil(words / 200) + " min" };
+  s.innerHTML = Object.entries(data).map(([k, n]) => '<div class="sunken-panel"><div class="muted">' + k + '</div><b class="big">' + n + '</b></div>').join("");
 }
 t.oninput = upd; upd();
-</script></main></body></html>
+</script></body></html>

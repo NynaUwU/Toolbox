@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conversor de unidades</title>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css">
+<style>
+  menu[role=tablist] { flex-wrap: wrap; }
+  #all td:first-child { width: 55%; }
+  #all td:last-child { text-align: right; }
+</style>
+</head><body>
+<menu role="tablist" id="tabs"></menu>
+<div class="window" role="tabpanel">
+  <div class="window-body stack">
+    <div class="row">
+      <input id="val" type="number" step="any" value="1" class="grow big" style="height:30px" aria-label="Valor">
+      <select id="from" class="grow" aria-label="De"></select>
+      <button id="swap" title="Inverter">⇄</button>
+      <select id="to" class="grow" aria-label="Para"></select>
+    </div>
+    <div class="sunken-panel"><span class="big" id="result">—</span></div>
+    <fieldset>
+      <legend>Em todas as unidades</legend>
+      <div class="sunken-panel" style="max-height:260px;overflow:auto"><table class="interactive"><tbody id="all"></tbody></table></div>
+    </fieldset>
+  </div>
+</div>
+<script>
+// Cada unidade: fator para a unidade base da categoria
+const CATS = {
+  "Peso": { base: "kg", u: {
+    "mg — miligrama": 1e-6, "g — grama": 1e-3, "kg — quilograma": 1, "t — tonelada": 1000,
+    "oz — onça": 0.028349523125, "lb — libra": 0.45359237, "st — stone": 6.35029318, "ct — quilate": 0.0002, "@ — arroba (15 kg)": 15 } },
+  "Comprimento": { u: {
+    "µm — micrômetro": 1e-6, "mm — milímetro": 1e-3, "cm — centímetro": 0.01, "m — metro": 1, "km — quilômetro": 1000,
+    "in — polegada": 0.0254, "ft — pé": 0.3048, "yd — jarda": 0.9144, "mi — milha": 1609.344, "nmi — milha náutica": 1852, "mil — milésimo de pol.": 0.0000254 } },
+  "Temperatura": { special: true, u: { "°C — Celsius": 0, "°F — Fahrenheit": 0, "K — Kelvin": 0 } },
+  "Volume": { u: {
+    "mL — mililitro": 1e-3, "L — litro": 1, "m³ — metro cúbico": 1000, "cm³": 1e-3,
+    "colher de chá": 0.005, "colher de sopa": 0.015, "xícara (240 mL)": 0.24,
+    "fl oz (EUA)": 0.0295735295625, "gal (EUA)": 3.785411784, "gal (UK)": 4.54609, "ft³": 28.316846592, "in³": 0.016387064 } },
+  "Área": { u: {
+    "mm²": 1e-6, "cm²": 1e-4, "m²": 1, "ha — hectare": 1e4, "km²": 1e6, "alqueire paulista": 24200, "alqueire mineiro": 48400,
+    "in²": 0.00064516, "ft²": 0.09290304, "acre": 4046.8564224 } },
+  "Velocidade": { u: { "m/s": 1, "km/h": 1 / 3.6, "mph": 0.44704, "nó": 1852 / 3600, "ft/s": 0.3048, "Mach (nível do mar)": 340.29 } },
+  "Pressão": { u: { "Pa": 1, "kPa": 1000, "MPa": 1e6, "bar": 1e5, "mbar": 100, "atm": 101325, "psi": 6894.757293168, "mmHg": 133.322387415, "kgf/cm²": 98066.5 } },
+  "Energia": { u: { "J": 1, "kJ": 1000, "cal": 4.184, "kcal": 4184, "Wh": 3600, "kWh": 3.6e6, "eV": 1.602176634e-19, "BTU": 1055.05585262 } },
+  "Potência": { u: { "W": 1, "kW": 1000, "MW": 1e6, "cv (cavalo-vapor)": 735.49875, "hp (mecânico)": 745.6998715822702, "BTU/h": 0.29307107, "kcal/h": 1.163 } },
+  "Tempo": { u: { "ms": 1e-3, "s": 1, "min": 60, "h": 3600, "dia": 86400, "semana": 604800, "mês (30 d)": 2592000, "ano (365 d)": 31536000 } },
+  "Dados": { u: { "bit": 1 / 8, "B — byte": 1, "KB (1000)": 1e3, "MB (1000)": 1e6, "GB (1000)": 1e9, "TB (1000)": 1e12,
+    "KiB (1024)": 1024, "MiB (1024)": 1024 ** 2, "GiB (1024)": 1024 ** 3, "TiB (1024)": 1024 ** 4 } },
+  "Ângulo": { u: { "° grau": 1, "rad — radiano": 180 / Math.PI, "grad": 0.9, "' minuto": 1 / 60, "\" segundo": 1 / 3600, "volta": 360 } },
+  "Torque": { u: { "N·m": 1, "kgf·m": 9.80665, "kgf·cm": 0.0980665, "lbf·ft": 1.3558179483, "lbf·in": 0.112984829 } },
+};
+const DEFAULT_PAIR = { "Peso": ["kg — quilograma", "lb — libra"], "Comprimento": ["in — polegada", "mm — milímetro"], "Temperatura": ["°C — Celsius", "°F — Fahrenheit"] };
+
+const toC = { "°C — Celsius": v => v, "°F — Fahrenheit": v => (v - 32) * 5 / 9, "K — Kelvin": v => v - 273.15 };
+const fromC = { "°C — Celsius": v => v, "°F — Fahrenheit": v => v * 9 / 5 + 32, "K — Kelvin": v => v + 273.15 };
+
+const $ = id => document.getElementById(id);
+let cat = localStorage.getItem("unit-cat") || "Peso";
+if (!CATS[cat]) cat = "Peso";
+
+function conv(v, a, b) {
+  const c = CATS[cat];
+  if (c.special) return fromC[b](toC[a](v));
+  return v * c.u[a] / c.u[b];
+}
+function fmt(n) {
+  if (!isFinite(n)) return "—";
+  const abs = Math.abs(n);
+  if (abs !== 0 && (abs < 1e-6 || abs >= 1e15)) return n.toExponential(6).replace(".", ",");
+  return n.toLocaleString("pt-BR", { maximumSignificantDigits: 10 });
+}
+function short(u) { return u.split(" — ")[0]; }
+
+function tabs() {
+  $("tabs").innerHTML = Object.keys(CATS).map(k => `<li role="tab" aria-selected="${k === cat}"><a href="#">${k}</a></li>`).join("");
+  $("tabs").querySelectorAll("li").forEach((li, i) => li.onclick = e => { e.preventDefault(); cat = Object.keys(CATS)[i]; try { localStorage.setItem("unit-cat", cat); } catch {} setup(); });
+}
+function setup() {
+  tabs();
+  const units = Object.keys(CATS[cat].u);
+  const opts = units.map(u => `<option>${u}</option>`).join("");
+  $("from").innerHTML = $("to").innerHTML = opts;
+  const [a, b] = DEFAULT_PAIR[cat] || [units[1] || units[0], units[2] || units[0]];
+  $("from").value = a; $("to").value = b;
+  calc();
+}
+function calc() {
+  const v = parseFloat($("val").value);
+  const a = $("from").value, b = $("to").value;
+  $("result").textContent = isNaN(v) ? "—" : `${fmt(v)} ${short(a)} = ${fmt(conv(v, a, b))} ${short(b)}`;
+  $("all").innerHTML = isNaN(v) ? "" : Object.keys(CATS[cat].u).map(u => `<tr><td>${u}</td><td class="mono">${fmt(conv(v, a, u))}</td></tr>`).join("");
+}
+$("val").oninput = $("from").onchange = $("to").onchange = calc;
+$("swap").onclick = () => { [$("from").value, $("to").value] = [$("to").value, $("from").value]; calc(); };
+setup();
+</script>
+</body></html>

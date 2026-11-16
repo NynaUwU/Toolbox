@@ -1,46 +1,65 @@
 # 🧰 Toolbox
 
-Site estático que reúne minhas ferramentas, sites e links. Tudo que for adicionado nas pastas abaixo **aparece sozinho** na página inicial após o push.
+Central pessoal de ferramentas que roda **só no seu computador** (http://localhost:3098), com visual inspirado no Windows 98.
+
+## O que tem
+
+| Ferramenta | O que faz | Usa |
+|---|---|---|
+| 📼 YouTube Downloader | Vídeo/playlist → MP3, M4A, WAV, MP4, WEBM | yt-dlp + ffmpeg |
+| 🔁 Conversor de arquivos | Word ↔ PDF, vídeo ↔ áudio, GIF ↔ vídeo, PNG/JPG/WEBP/BMP/TIFF/ICO, planilhas, apresentações | ffmpeg + LibreOffice |
+| 📏 Conversor de unidades | Peso, comprimento, temperatura, volume, área, velocidade, pressão, energia, potência, tempo, dados, ângulo, torque | — |
+| 💱 Conversor de moedas | 160+ moedas, guarda a última cotação para uso offline | open.er-api.com / Frankfurter |
+| 🔌 Bitolas de fio | AWG ↔ mm² ↔ diâmetro, corrente (NBR 5410), queda de tensão | — |
+| 🔐 🧾 🔢 | Gerador de senhas, formatador de JSON, contador de texto | — |
+
+Arquivos baixados/convertidos vão para **`Downloads\Toolbox`** (mude com a variável `TOOLBOX_OUTPUT`).
+
+## Instalação (Windows, uma vez)
+
+1. Instale o Git (se ainda não tiver):
+   ```
+   winget install -e --id Git.Git
+   ```
+2. Clone o repositório onde preferir:
+   ```
+   git clone https://github.com/NynaUwU/Toolbox.git
+   ```
+3. Dê dois cliques em **`Toolbox.bat`**. Na primeira vez ele:
+   - instala o Node.js (via winget) se faltar — depois é só abrir o `.bat` de novo;
+   - baixa o **yt-dlp** e o **ffmpeg** para a pasta `bin\`;
+   - pergunta se quer instalar o **LibreOffice** (necessário só para Word/PDF).
+
+Para abrir sem a janela preta na frente, use **`Toolbox (minimizado).vbs`**.
+Para iniciar junto com o Windows: `Win + R` → `shell:startup` → cole ali um atalho do `.vbs`.
+
+## Atualizações automáticas
+
+- **Ao abrir:** o `Toolbox.bat` faz `git pull` e instala dependências novas.
+- **Com ela aberta:** a cada 30 min o servidor verifica o GitHub; se houver novidade e nenhuma tarefa rodando, baixa e reinicia sozinho (a página recarrega).
+- **Manual:** clique na versão na barra de status, ou no botão 🔄 que aparece no topo.
+- **yt-dlp:** é atualizado 1x por dia (o YouTube muda com frequência). Também há o botão *Atualizar yt-dlp* na ferramenta.
+
+## Adicionar coisas
+
+- **Ferramenta:** `tools/<nome>/index.html` + `meta.json`
+- **Site:** `sites/<nome>/index.html` + `meta.json`
+- **Atalho externo:** uma entrada em `links.json`
+
+```json
+{ "title": "Nome", "description": "O que faz", "icon": "⚡", "order": 10 }
+```
+
+Aparecem sozinhos no menu — sem build. Use `"hidden": true` para ocultar.
 
 ## Estrutura
 
-| Pasta / arquivo | Para que serve |
-|---|---|
-| `tools/<nome>/` | Ferramentas (cada uma com `index.html` + `meta.json`) |
-| `sites/<nome>/` | Sites completos criados por mim / pelo Claude |
-| `links.json` | Links externos (artifacts do claude.ai, outros sites) |
-| `scripts/build-catalog.mjs` | Varre as pastas e gera `catalog.json` |
-| `.github/workflows/deploy.yml` | Gera o catálogo e publica no GitHub Pages a cada push na `main` |
-
-## Adicionar algo novo
-
-1. Crie `tools/minha-ferramenta/` ou `sites/meu-site/` com um `index.html`.
-2. Adicione um `meta.json`:
-   ```json
-   {
-     "title": "Minha ferramenta",
-     "description": "O que ela faz.",
-     "icon": "⚡",
-     "tags": ["dev"]
-   }
-   ```
-   Campos opcionais: `"url"` (aponta para fora em vez da pasta), `"updated"` (data ISO manual), `"hidden": true` (oculta).
-3. Faça push na `main` → o catálogo é regenerado e o site republicado.
-
-**Atualizar** um site existente = editar os arquivos da pasta e dar push. A data e o selo "Atualizado" (últimos 14 dias) vêm do histórico do git.
-
-## Rodar localmente
-
-```bash
-node scripts/build-catalog.mjs
 ```
-
-```bash
-python3 -m http.server 8000
+Toolbox.bat            launcher (atualiza, instala, reinicia)
+server.mjs             servidor local (Express, só 127.0.0.1)
+lib/                   yt-dlp, conversões, tarefas, atualizador
+scripts/setup.mjs      baixa/atualiza yt-dlp, ffmpeg, LibreOffice
+public/                interface principal
+tools/  sites/         conteúdo (cada pasta = um item)
+bin/ data/ tmp/        gerados localmente (fora do git)
 ```
-
-Depois abra http://localhost:8000.
-
-## Ativar o GitHub Pages (uma vez)
-
-Settings → Pages → **Source: GitHub Actions**.

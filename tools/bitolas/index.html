@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bitolas de fio</title>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css">
+<style>
+  table.interactive td, table.interactive th { text-align: right; white-space: nowrap; }
+  table.interactive td:first-child, table.interactive th:first-child { text-align: left; }
+  tr.hl td { background: #000080; color: #fff; }
+  .out { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; }
+  .out b { font-family: "Courier New", monospace; font-size: 13px; }
+</style>
+</head><body>
+<menu role="tablist" id="tabs">
+  <li role="tab" aria-selected="true"><a href="#conv">Conversor</a></li>
+  <li role="tab"><a href="#corrente">Corrente / queda de tensão</a></li>
+  <li role="tab"><a href="#awg">Tabela AWG</a></li>
+  <li role="tab"><a href="#nbr">Tabela mm² (NBR 5410)</a></li>
+</menu>
+<div class="window" role="tabpanel"><div class="window-body">
+
+<section id="conv" class="stack">
+  <div class="row">
+    <label for="mode">Tenho:</label>
+    <select id="mode">
+      <option value="awg">Número AWG</option>
+      <option value="mm2">Seção em mm²</option>
+      <option value="dmm">Diâmetro em mm (medido no paquímetro)</option>
+      <option value="din">Diâmetro em polegadas</option>
+    </select>
+    <input id="inp" type="text" value="18" style="width:90px" aria-label="Valor">
+    <span class="muted" id="hint">ex.: 18, 0, 00, 4/0</span>
+  </div>
+  <fieldset><legend>Resultado (cobre)</legend><div class="out" id="out"></div></fieldset>
+  <p class="muted">Dica para fio esmaltado (bobinas, Joule Thief): meça o diâmetro <i>com</i> o esmalte e desconte ~0,02–0,05 mm.</p>
+</section>
+
+<section id="corrente" class="stack" hidden>
+  <fieldset><legend>Bitola mínima pela corrente (NBR 5410 · cobre, PVC 70 °C, 2 condutores carregados, eletroduto embutido — método B1)</legend>
+    <div class="row">
+      <label for="amp">Corrente:</label><input id="amp" type="number" value="20" step="any" style="width:70px"> A
+      <span class="muted">ou</span>
+      <label for="pw">Potência:</label><input id="pw" type="number" placeholder="W" step="any" style="width:80px"> W em
+      <select id="volt"><option>127</option><option selected>220</option><option>12</option><option>24</option></select> V
+    </div>
+    <p id="amp-out" class="big" style="margin-top:8px"></p>
+  </fieldset>
+  <fieldset><legend>Queda de tensão (circuito monofásico/CC: ida e volta)</legend>
+    <div class="row">
+      <label for="len">Comprimento:</label><input id="len" type="number" value="20" step="any" style="width:70px"> m
+      <label for="sec">Seção:</label><select id="sec"></select>
+    </div>
+    <p id="drop-out" style="margin-top:8px"></p>
+    <p class="muted">Limite usual: 4% em circuitos terminais. Valores de referência: confirme com um projeto ou um eletricista.</p>
+  </fieldset>
+</section>
+
+<section id="awg" hidden>
+  <div class="sunken-panel" style="max-height:360px;overflow:auto"><table class="interactive"><thead>
+    <tr><th>AWG</th><th>Ø mm</th><th>Ø pol</th><th>mm²</th><th>Ω/km</th><th>mm² comercial ≥</th></tr></thead><tbody id="awg-body"></tbody></table></div>
+</section>
+
+<section id="nbr" hidden>
+  <div class="sunken-panel" style="max-height:360px;overflow:auto"><table class="interactive"><thead>
+    <tr><th>mm²</th><th>Ø fio sólido</th><th>AWG aprox.</th><th>Corrente B1</th><th>Ω/km</th><th style="text-align:left">Uso típico</th></tr></thead><tbody id="nbr-body"></tbody></table></div>
+</section>
+
+</div></div>
+<script>
+const $ = id => document.getElementById(id);
+const RHO = 0.017241; // Ω·mm²/m — cobre a 20 °C
+// NBR 5410, tabela 36, método B1, 2 condutores carregados, PVC
+const NBR = [
+  [0.5, 9], [0.75, 11], [1, 14], [1.5, 17.5, "Iluminação (mínimo)"], [2.5, 24, "Tomadas de uso geral (mínimo)"],
+  [4, 32, "Tomadas de uso específico, chuveiro até ~5.500 W/220 V"], [6, 41, "Chuveiro até ~7.500 W/220 V"],
+  [10, 57, "Alimentadores, chuveiros potentes"], [16, 76, "Entrada de energia residencial"], [25, 101], [35, 125],
+  [50, 151], [70, 192], [95, 232], [120, 269], [150, 309], [185, 353], [240, 415],
+];
+const label = n => n > 0 ? String(n) : "0".repeat(1 - n) + (n < 0 ? ` (${1 - n}/0)` : "");
+const awgD = n => 0.127 * Math.pow(92, (36 - n) / 39);           // diâmetro mm
+const area = d => Math.PI * d * d / 4;
+const dFromArea = a => Math.sqrt(4 * a / Math.PI);
+const awgFromD = d => 36 - 39 * Math.log(d / 0.127) / Math.log(92);
+const nf = (v, d = 3) => v.toLocaleString("pt-BR", { maximumFractionDigits: d });
+const nextMetric = a => NBR.find(([s]) => s >= a - 1e-9)?.[0];
+
+function parseAwg(s) {
+  s = s.trim();
+  const m = s.match(/^(\d)\/0$/);
+  if (m) return 1 - +m[1];
+  if (/^0+$/.test(s)) return 1 - s.length;
+  const n = parseFloat(s.replace(",", "."));
+  return isNaN(n) ? null : n;
+}
+
+function convCalc() {
+  const mode = $("mode").value, raw = $("inp").value.replace(",", ".");
+  $("hint").textContent = { awg: "ex.: 18, 0, 00, 4/0", mm2: "ex.: 2.5", dmm: "ex.: 0.5", din: "ex.: 0.04" }[mode];
+  let d;
+  if (mode === "awg") { const n = parseAwg($("inp").value); d = n == null ? NaN : awgD(n); }
+  else if (mode === "mm2") d = dFromArea(parseFloat(raw));
+  else if (mode === "dmm") d = parseFloat(raw);
+  else d = parseFloat(raw) * 25.4;
+  if (!(d > 0)) { $("out").innerHTML = '<span class="error">Valor inválido</span>'; return; }
+  const a = area(d), awg = awgFromD(d), r = Math.round(awg);
+  const near = Math.abs(awg - r) < 0.05 ? `AWG ${label(r)}` : `entre AWG ${label(Math.ceil(awg))} e ${label(Math.floor(awg))} (≈ ${nf(awg, 1)})`;
+  const metric = nextMetric(a);
+  const nbr = NBR.find(([s]) => s === metric);
+  $("out").innerHTML = [
+    ["Diâmetro", `${nf(d, 4)} mm  ·  ${nf(d / 25.4, 4)} pol`],
+    ["Seção", `${nf(a, 4)} mm²  ·  ${nf(a / 0.506707, 2)} kcmil`],
+    ["AWG", near],
+    ["Resistência", `${nf(RHO * 1000 / a, 3)} Ω/km  ·  ${nf(RHO / a * 1000, 2)} mΩ/m`],
+    ["Bitola comercial ≥", metric ? `${nf(metric)} mm² (até ${nf(nbr[1], 1)} A em eletroduto)` : "acima de 240 mm²"],
+  ].map(([k, v]) => `<span>${k}:</span><b>${v}</b>`).join("");
+}
+
+function ampCalc() {
+  let I = parseFloat($("amp").value);
+  const P = parseFloat($("pw").value), V = parseFloat($("volt").value);
+  if (P > 0) { I = P / V; $("amp").value = nf(I, 2).replace(",", "."); }
+  const row = NBR.find(([, cap]) => cap >= I);
+  $("amp-out").textContent = !(I > 0) ? "" : row ? `${nf(I, 2)} A → mínimo ${nf(row[0])} mm² (suporta ${nf(row[1], 1)} A)` : "Acima de 415 A — consulte um projeto.";
+  if (row && document.activeElement !== $("sec")) $("sec").value = row[0];
+  dropCalc();
+}
+function dropCalc() {
+  const I = parseFloat($("amp").value), L = parseFloat($("len").value), S = parseFloat($("sec").value), V = parseFloat($("volt").value);
+  if (!(I > 0 && L > 0)) return ($("drop-out").textContent = "");
+  const dv = 2 * L * I * RHO / S, pct = dv / V * 100;
+  $("drop-out").innerHTML = `Queda: <b>${nf(dv, 2)} V</b> (${nf(pct, 2)}% de ${V} V) ${pct > 4 ? '<span class="error">— acima de 4%, aumente a bitola</span>' : '<span class="ok">— ok</span>'}`;
+}
+
+// Tabelas
+$("awg-body").innerHTML = Array.from({ length: 44 }, (_, i) => i - 3).map(n => {
+  const d = awgD(n), a = area(d);
+  return `<tr data-awg="${n}"><td>${label(n)}</td><td>${nf(d, 3)}</td><td>${nf(d / 25.4, 4)}</td><td>${nf(a, 4)}</td><td>${nf(RHO * 1000 / a, 2)}</td><td>${nextMetric(a) ? nf(nextMetric(a)) : "—"}</td></tr>`;
+}).join("");
+$("nbr-body").innerHTML = NBR.map(([s, cap, uso]) => {
+  const d = dFromArea(s);
+  return `<tr><td>${nf(s)}</td><td>${nf(d, 2)} mm</td><td>${nf(awgFromD(d), 1)}</td><td>${nf(cap, 1)} A</td><td>${nf(RHO * 1000 / s, 2)}</td><td style="text-align:left">${uso || ""}</td></tr>`;
+}).join("");
+$("sec").innerHTML = NBR.map(([s]) => `<option value="${s}">${nf(s)} mm²</option>`).join("");
+
+// Abas
+document.querySelectorAll("#tabs li").forEach(li => li.onclick = e => {
+  e.preventDefault();
+  const id = li.querySelector("a").hash.slice(1);
+  document.querySelectorAll("#tabs li").forEach(x => x.setAttribute("aria-selected", x === li));
+  document.querySelectorAll("section").forEach(s => s.hidden = s.id !== id);
+});
+
+$("mode").onchange = () => { $("inp").value = { awg: "18", mm2: "2.5", dmm: "0.5", din: "0.04" }[$("mode").value]; convCalc(); };
+$("inp").oninput = convCalc;
+$("amp").oninput = () => { $("pw").value = ""; ampCalc(); };
+$("pw").oninput = $("volt").onchange = ampCalc;
+$("len").oninput = $("sec").onchange = dropCalc;
+convCalc(); ampCalc();
+</script>
+</body></html>

@@ -1,0 +1,240 @@
+// Toolbox — servidor local. Acessível apenas em http://localhost:3098
+import express from "express";
+import multer from "multer";
+import fs from "node:fs";
+import path from "node:path";
+import { spawn, execFile } from "node:child_process";
+import { ROOT, OUTPUT, TMP, DATA, IS_WIN, findTool, insideDir } from "./lib/paths.mjs";
+import { createJob, getJob, listJobs, finishJob, hasRunning } from "./lib/jobs.mjs";
+import { GROUPS, groupFor, convert } from "./lib/convert.mjs";
+import { download, FORMATS } from "./lib/youtube.mjs";
+import * as updater from "./lib/updater.mjs";
+
+const PORT = Number(process.env.TOOLBOX_PORT) || 3098;
+const HOST = "127.0.0.1";
+const RESTART_CODE = 42; // o Toolbox.bat reinicia o servidor quando recebe este código
+const AUTO_UPDATE_MIN = 30;
+
+const app = express();
+app.use(express.json());
+
+// Bloqueia requisições vindas de outros sites (proteção contra CSRF em localhost)
+app.use("/api", (req, res, next) => {
+  const origin = req.get("origin");
+  if (req.method !== "GET" && origin && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+    return res.status(403).json({ error: "Origem não permitida" });
+  }
+  next();
+});
+
+// ---------- Arquivos estáticos ----------
+app.use("/vendor/98", express.static(path.join(ROOT, "node_modules", "98.css", "dist")));
+app.use("/tools", express.static(path.join(ROOT, "tools")));
+app.use("/sites", express.static(path.join(ROOT, "sites")));
+app.use("/", express.static(path.join(ROOT, "public")));
+
+// ---------- Catálogo (desktop) ----------
+function readJson(p, fallback) {
+  try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return fallback; }
+}
+
+app.get("/api/catalog", (req, res) => {
+  const items = [];
+  for (const [dir, kind] of [["tools", "tool"], ["sites", "site"]]) {
+    const base = path.join(ROOT, dir);
+    if (!fs.existsSync(base)) continue;
+    for (const slug of fs.readdirSync(base).sort()) {
+      const meta = readJson(path.join(base, slug, "meta.json"), null);
+      if (!meta || meta.hidden) continue;
+      items.push({
+        slug, kind,
+        title: meta.title || slug,
+        description: meta.description || "",
+        icon: meta.icon || (kind === "tool" ? "🛠️" : "🌐"),
+        width: meta.width, height: meta.height,
+        order: meta.order ?? 100,
+        url: `/${dir}/${slug}/`,
+      });
+    }
+  }
+  for (const l of readJson(path.join(ROOT, "links.json"), [])) {
+    items.push({ kind: "link", slug: l.slug || l.url, title: l.title, description: l.description || "",
+      icon: l.icon || "🔗", url: l.url, order: l.order ?? 100, external: /^https?:/.test(l.url) });
+  }
+  items.sort((a, b) => a.order - b.order || a.title.localeCompare(b.title, "pt-BR"));
+  res.json({ items });
+});
+
+// ---------- Status / ferramentas externas ----------
+const versionOf = (cmd, args) => new Promise(resolve => {
+  if (!cmd) return resolve(null);
+  execFile(cmd, args, { timeout: 15000, windowsHide: true }, (err, out) =>
+    resolve(err ? null : String(out).split(/\r?\n/)[0].trim().slice(0, 80)));
+});
+
+let toolsCache = null;
+async function toolStatus(force) {
+  if (toolsCache && !force) return toolsCache;
+  const [ytdlp, ffmpeg, soffice] = [findTool("yt-dlp"), findTool("ffmpeg"), findTool("soffice")];
+  const [v1, v2] = await Promise.all([versionOf(ytdlp, ["--version"]), versionOf(ffmpeg, ["-version"])]);
+  toolsCache = {
+    "yt-dlp": { ok: Boolean(v1), version: v1 },
+    ffmpeg: { ok: Boolean(v2), version: v2?.replace(/^ffmpeg version /, "").split(" ")[0] },
+    libreoffice: { ok: Boolean(soffice), version: soffice ? "instalado" : null },
+  };
+  return toolsCache;
+}
+
+app.get("/api/status", async (req, res) => {
+  res.json({
+    tools: await toolStatus(req.query.refresh === "1"),
+    update: updater.state,
+    output: OUTPUT,
+    busy: hasRunning(),
+  });
+});
+
+// ---------- Tarefas ----------
+app.get("/api/jobs", (req, res) => res.json(listJobs()));
+app.get("/api/jobs/:id", (req, res) => {
+  const job = getJob(req.params.id);
+  if (!job) return res.status(404).json({ error: "Tarefa não encontrada" });
+  res.json({ ...job, log: job.log.slice(-15) });
+});
+
+// ---------- YouTube ----------
+app.get("/api/youtube/formats", (req, res) => res.json(FORMATS));
+app.post("/api/youtube", (req, res) => {
+  const { url } = req.body || {};
+  if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: "Informe uma URL válida." });
+  const job = createJob("youtube", url);
+  download(job, req.body).then(() => finishJob(job), err => finishJob(job, err));
+  res.json({ id: job.id });
+});
+
+// ---------- Conversor de arquivos ----------
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: TMP,
+    filename: (req, file, cb) => cb(null, `up-${Date.now()}-${Math.random().toString(36).slice(2)}`),
+  }),
+  limits: { fileSize: 8 * 1024 ** 3 },
+});
+
+app.get("/api/convert/formats", (req, res) => res.json(GROUPS));
+app.post("/api/convert", upload.single("file"), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado." });
+  // multer entrega o nome em latin1; converte para UTF-8 (acentos)
+  const name = Buffer.from(req.file.originalname, "latin1").toString("utf8");
+  const target = String(req.body.target || "").toLowerCase();
+  if (!groupFor(path.extname(name).slice(1))) {
+    fs.rm(req.file.path, () => {});
+    return res.status(400).json({ error: "Formato não suportado." });
+  }
+  const job = createJob("convert", `${name} → .${target}`);
+  convert(job, req.file.path, name, target, req.body)
+    .then(out => { job.files.push(path.relative(OUTPUT, out)); finishJob(job); }, err => finishJob(job, err))
+    .finally(() => fs.rm(req.file.path, () => {}));
+  res.json({ id: job.id });
+});
+
+// ---------- Arquivos de saída ----------
+app.get("/api/files", (req, res) => {
+  const full = insideDir(OUTPUT, String(req.query.f || ""));
+  if (!full || !fs.existsSync(full)) return res.status(404).send("Arquivo não encontrado");
+  if (req.query.view === "1") return res.sendFile(full);
+  res.download(full);
+});
+
+function openInExplorer(target, select) {
+  const cmd = IS_WIN ? "explorer.exe" : process.platform === "darwin" ? "open" : "xdg-open";
+  const args = IS_WIN && select ? [`/select,${target}`] : process.platform === "darwin" && select ? ["-R", target] : [select ? path.dirname(target) : target];
+  spawn(cmd, args, { detached: true, stdio: "ignore", windowsHide: false }).on("error", () => {}).unref();
+}
+
+app.post("/api/open-folder", (req, res) => {
+  const f = req.body?.f;
+  const full = f ? insideDir(OUTPUT, f) : null;
+  openInExplorer(full && fs.existsSync(full) ? full : OUTPUT, Boolean(full));
+  res.json({ ok: true });
+});
+
+// ---------- Câmbio (com cache para funcionar offline) ----------
+const FX_CACHE = path.join(DATA, "cambio.json");
+app.get("/api/currency", async (req, res) => {
+  const cache = readJson(FX_CACHE, null);
+  const fresh = cache && Date.now() - cache.fetched < 60 * 60 * 1000;
+  if (fresh && req.query.refresh !== "1") return res.json(cache);
+  try {
+    let data;
+    try {
+      const r = await fetch("https://open.er-api.com/v6/latest/USD", { signal: AbortSignal.timeout(10000) });
+      const j = await r.json();
+      if (j.result !== "success") throw new Error("falha");
+      data = { base: "USD", rates: j.rates, date: j.time_last_update_utc, source: "ExchangeRate-API (open.er-api.com)" };
+    } catch {
+      const r = await fetch("https://api.frankfurter.app/latest?from=USD", { signal: AbortSignal.timeout(10000) });
+      const j = await r.json();
+      data = { base: "USD", rates: { USD: 1, ...j.rates }, date: j.date, source: "Frankfurter (BCE)" };
+    }
+    data.fetched = Date.now();
+    fs.writeFileSync(FX_CACHE, JSON.stringify(data));
+    res.json(data);
+  } catch {
+    if (cache) return res.json({ ...cache, stale: true });
+    res.status(503).json({ error: "Sem conexão e sem cotações salvas." });
+  }
+});
+
+// ---------- Atualizações ----------
+app.post("/api/update/check", async (req, res) => res.json(await updater.checkUpdates()));
+app.post("/api/update/apply", async (req, res) => {
+  try {
+    const changed = await updater.applyUpdate();
+    res.json({ ok: true, restarting: changed });
+    if (changed) setTimeout(() => process.exit(RESTART_CODE), 500);
+  } catch (e) {
+    res.status(500).json({ error: String(e.stderr || e.message).slice(0, 400) });
+  }
+});
+app.post("/api/tools/update", (req, res) => {
+  const ytdlp = findTool("yt-dlp");
+  if (!ytdlp) return res.status(400).json({ error: "yt-dlp não instalado." });
+  execFile(ytdlp, ["-U"], { timeout: 120000, windowsHide: true }, (err, out, errOut) => {
+    toolsCache = null;
+    res.json({ ok: !err, output: String(out || errOut).trim().slice(-600) });
+  });
+});
+
+// Verificação periódica: atualiza sozinho quando não há tarefas rodando
+async function autoUpdate() {
+  await updater.checkUpdates();
+  if (updater.state.behind > 0 && !hasRunning()) {
+    try {
+      if (await updater.applyUpdate()) {
+        console.log("Atualização aplicada — reiniciando…");
+        process.exit(RESTART_CODE);
+      }
+    } catch (e) {
+      updater.state.error = "Falha ao aplicar atualização automática (há alterações locais?).";
+    }
+  }
+}
+
+// ---------- Início ----------
+fs.rmSync(TMP, { recursive: true, force: true });
+fs.mkdirSync(TMP, { recursive: true });
+await updater.currentVersion();
+
+app.listen(PORT, HOST, () => {
+  const url = `http://localhost:${PORT}`;
+  console.log(`\n  Toolbox rodando em ${url}\n  Arquivos salvos em: ${OUTPUT}\n  (feche esta janela para encerrar)\n`);
+  if (process.argv.includes("--open")) {
+    const [cmd, args] = IS_WIN ? ["cmd", ["/c", "start", "", url]] : [process.platform === "darwin" ? "open" : "xdg-open", [url]];
+    spawn(cmd, args, { detached: true, stdio: "ignore" }).on("error", () => {}).unref();
+  }
+  if (updater.state.available) {
+    setTimeout(autoUpdate, 15000);
+    setInterval(autoUpdate, AUTO_UPDATE_MIN * 60 * 1000);
+  }
+});

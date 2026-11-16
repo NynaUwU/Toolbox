@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conversor de arquivos</title>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css">
+</head><body>
+<div class="stack">
+  <label class="dropzone" id="drop" for="file">
+    <div class="big">📁</div>
+    <span><b>Arraste arquivos aqui</b> ou clique para escolher</span>
+    <div class="muted" id="accepted"></div>
+  </label>
+  <input type="file" id="file" multiple hidden>
+
+  <fieldset id="queue-box" hidden>
+    <legend>Arquivos selecionados</legend>
+    <div class="sunken-panel" style="max-height:160px;overflow:auto">
+      <table class="interactive"><thead><tr><th>Arquivo</th><th>Tipo</th><th>Converter para</th><th></th></tr></thead><tbody id="queue"></tbody></table>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <label for="all">Todos para:</label><select id="all"></select>
+    </div>
+  </fieldset>
+
+  <fieldset id="opts" hidden>
+    <legend>Opções</legend>
+    <div class="row">
+      <div class="field-row" data-for="audio"><label for="bitrate">Áudio:</label>
+        <select id="bitrate"><option value="320">320 kbps</option><option value="256">256 kbps</option><option value="192" selected>192 kbps</option><option value="128">128 kbps</option></select></div>
+      <div class="field-row" data-for="video"><label for="crf">Qualidade vídeo:</label>
+        <select id="crf"><option value="18">Alta</option><option value="23" selected>Normal</option><option value="28">Menor arquivo</option></select></div>
+      <div class="field-row" data-for="gif"><label for="fps">FPS do GIF:</label><input id="fps" type="number" value="12" min="1" max="50" style="width:50px"></div>
+      <div class="field-row" data-for="scale"><label for="width">Largura (px, 0 = original):</label><input id="width" type="number" value="0" min="0" max="3840" step="10" style="width:70px"></div>
+    </div>
+  </fieldset>
+
+  <div class="row">
+    <button class="default" id="go" disabled>▶ Converter</button>
+    <button id="clear" disabled>Limpar</button>
+    <button id="folder">📂 Abrir pasta</button>
+  </div>
+  <p class="muted" id="note"></p>
+  <div id="jobs"></div>
+</div>
+
+<script type="module">
+import { api, trackJob, openOutput } from "/assets/jobs98.js";
+const $ = id => document.getElementById(id);
+const AUDIO = ["mp3", "wav", "m4a", "ogg", "flac", "opus", "aac"];
+const LABEL = { mp3: "MP3", wav: "WAV", m4a: "M4A", ogg: "OGG", flac: "FLAC", opus: "OPUS", aac: "AAC",
+  mp4: "MP4", webm: "WEBM", mkv: "MKV", avi: "AVI", mov: "MOV", gif: "GIF", png: "PNG", jpg: "JPG", bmp: "BMP",
+  tiff: "TIFF", ico: "ICO (ícone)", pdf: "PDF", docx: "Word (DOCX)", doc: "Word 97 (DOC)", odt: "ODT", rtf: "RTF",
+  txt: "Texto (TXT)", html: "HTML", xlsx: "Excel (XLSX)", ods: "ODS", csv: "CSV", pptx: "PowerPoint (PPTX)", odp: "ODP" };
+// Saída padrão sugerida por tipo de entrada
+const DEFAULT = { video: "mp3", audio: "mp3", gif: "mp4", image: "png", document: "pdf", pdf: "docx", sheet: "pdf", slides: "pdf" };
+
+const groups = await api("/api/convert/formats");
+let queue = [];
+
+$("accepted").textContent = "Aceita: " + Object.values(groups).map(g => g.label).join(", ");
+const groupOf = name => {
+  const ext = name.split(".").pop().toLowerCase();
+  return Object.entries(groups).find(([, g]) => g.inputs.includes(ext))?.[0];
+};
+
+function render() {
+  $("queue-box").hidden = !queue.length;
+  $("go").disabled = $("clear").disabled = !queue.length;
+  $("queue").innerHTML = "";
+  queue.forEach((q, i) => {
+    const tr = document.createElement("tr");
+    const g = groups[q.group];
+    const ext = q.file.name.split(".").pop().toLowerCase();
+    tr.innerHTML = `<td></td><td>${g ? g.label : '<span class="error">não suportado</span>'}</td><td></td><td><button class="link">remover</button></td>`;
+    tr.cells[0].textContent = q.file.name;
+    if (g) {
+      const sel = document.createElement("select");
+      sel.innerHTML = g.targets.filter(t => t !== ext && !(ext === "jpeg" && t === "jpg"))
+        .map(t => `<option value="${t}" ${t === q.target ? "selected" : ""}>${LABEL[t] || t}</option>`).join("");
+      q.target = sel.value;
+      sel.onchange = () => { q.target = sel.value; updateOptions(); };
+      tr.cells[2].append(sel);
+    }
+    tr.querySelector("button").onclick = () => { queue.splice(i, 1); render(); };
+    $("queue").append(tr);
+  });
+  // "Todos para": alvos em comum
+  const valid = queue.filter(q => q.group);
+  const common = valid.length ? valid.map(q => groups[q.group].targets).reduce((a, b) => a.filter(x => b.includes(x))) : [];
+  $("all").innerHTML = `<option value="">—</option>` + common.map(t => `<option value="${t}">${LABEL[t] || t}</option>`).join("");
+  updateOptions();
+}
+
+function updateOptions() {
+  const sel = queue.filter(q => q.group);
+  const show = { audio: false, video: false, gif: false, scale: false };
+  const docs = sel.some(q => ["document", "pdf", "sheet", "slides"].includes(q.group));
+  for (const q of sel) {
+    if (AUDIO.includes(q.target)) show.audio = true;
+    if (["mp4", "webm", "mkv", "mov"].includes(q.target) && q.group !== "audio") { show.video = true; show.scale = true; }
+    if (q.target === "gif" && q.group === "video") { show.gif = true; show.scale = true; }
+    if (q.group === "image") show.scale = true;
+  }
+  document.querySelectorAll("#opts [data-for]").forEach(el => el.hidden = !show[el.dataset.for]);
+  $("opts").hidden = !Object.values(show).some(Boolean);
+  $("note").textContent = sel.some(q => q.group === "pdf")
+    ? "Obs.: PDF → Word funciona melhor com PDFs de texto; layouts complexos podem sair diferentes."
+    : docs ? "Documentos são convertidos com o LibreOffice." : "";
+}
+
+function add(files) {
+  for (const file of files) {
+    const group = groupOf(file.name);
+    queue.push({ file, group, target: DEFAULT[group] });
+  }
+  render();
+}
+
+$("file").onchange = e => { add(e.target.files); e.target.value = ""; };
+const drop = $("drop");
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); add(e.dataTransfer.files); };
+$("all").onchange = () => { if ($("all").value) { queue.forEach(q => q.group && (q.target = $("all").value)); render(); } };
+$("clear").onclick = () => { queue = []; render(); };
+$("folder").onclick = openOutput;
+
+$("go").onclick = async () => {
+  const items = queue.filter(q => q.group);
+  queue = []; render();
+  for (const q of items) {
+    const fd = new FormData();
+    fd.append("target", q.target);
+    for (const k of ["bitrate", "crf", "fps", "width"]) fd.append(k, $(k).value);
+    fd.append("file", q.file);
+    try {
+      const { id } = await api("/api/convert", { method: "POST", body: fd });
+      trackJob($("jobs"), id, `${q.file.name} → ${LABEL[q.target] || q.target}`);
+    } catch (e) {
+      $("note").innerHTML = `<span class="error">✖ ${q.file.name}: ${e.message}</span>`;
+    }
+  }
+};
+</script>
+</body></html>

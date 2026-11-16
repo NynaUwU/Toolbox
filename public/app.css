@@ -1,0 +1,73 @@
+/* Visual inspirado no Windows 98 — mas com layout de app moderno */
+html, body { height: 100%; margin: 0; }
+body {
+  display: flex; flex-direction: column;
+  background: #3a8c8c;
+  background-image: radial-gradient(rgba(255,255,255,.06) 1px, transparent 1px);
+  background-size: 4px 4px;
+  font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
+  font-size: 11px;
+}
+
+/* ---------- Topo ---------- */
+.topbar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 10px;
+  background: linear-gradient(90deg, #000080, #1084d0);
+  color: #fff;
+  box-shadow: inset 0 -1px #000;
+}
+.brand { color: #fff; text-decoration: none; font-size: 15px; }
+.spacer { flex: 1; }
+#btn-update { font-weight: bold; animation: blink 1.2s steps(2) infinite; }
+@keyframes blink { 50% { color: #000080; } }
+
+/* ---------- Layout ---------- */
+.layout { flex: 1; display: flex; gap: 8px; padding: 8px; min-height: 0; }
+.sidebar { width: 220px; flex: none; display: flex; flex-direction: column; }
+.sidebar .window-body { flex: 1; display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+.sidebar #search { width: 100%; }
+#nav { flex: 1; overflow-y: auto; padding: 2px; }
+#nav h3 { margin: 6px 4px 2px; font-size: 11px; color: #808080; text-transform: uppercase; letter-spacing: .5px; }
+#nav a {
+  display: flex; align-items: center; gap: 6px;
+  padding: 3px 4px; color: #000; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#nav a .ico { width: 18px; text-align: center; font-size: 14px; flex: none; }
+#nav a:hover { background: #dcdcf0; }
+#nav a.active { background: #000080; color: #fff; }
+
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.main .window-body { flex: 1; margin: 2px; display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+.main iframe { flex: 1; width: 100%; border: 0; background: #c0c0c0; }
+body.full .topbar, body.full .sidebar, body.full .status-bar { display: none; }
+body.full .layout { padding: 0; }
+
+/* ---------- Tela inicial ---------- */
+.home { padding: 8px; }
+.home h2 { font-size: 13px; margin: 14px 0 8px; }
+.home h2:first-child { margin-top: 0; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.tile {
+  all: unset; box-sizing: border-box; cursor: pointer;
+  display: grid; grid-template-columns: 40px 1fr; gap: 2px 8px; align-items: center;
+  padding: 8px; background: #c0c0c0;
+  box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px grey, inset 2px 2px #dfdfdf;
+}
+.tile:hover { background: #d4d4d4; }
+.tile:active { box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px grey; }
+.tile:focus-visible { outline: 1px dotted #000; outline-offset: -4px; }
+.tile .ico { grid-row: span 2; font-size: 30px; text-align: center; }
+.tile b { font-size: 12px; }
+.tile span.desc { color: #444; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.empty { color: #555; padding: 20px; text-align: center; }
+
+/* ---------- Rodapé ---------- */
+.status-bar { margin: 0 8px 8px; }
+.status-bar-field { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+@media (max-width: 700px) {
+  .layout { flex-direction: column; }
+  .sidebar { width: auto; max-height: 40vh; }
+}
+[hidden] { display: none !important; }

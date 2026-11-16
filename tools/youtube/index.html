@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YouTube Downloader</title>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css">
+</head><body>
+<form id="form" class="stack">
+  <fieldset>
+    <legend>Link</legend>
+    <div class="row">
+      <input id="url" type="url" class="grow" placeholder="https://www.youtube.com/watch?v=…" required autofocus>
+      <button type="button" id="paste">Colar</button>
+    </div>
+    <p class="muted">Funciona também com playlists e outros sites suportados pelo yt-dlp (Instagram, TikTok, SoundCloud, X…).</p>
+  </fieldset>
+
+  <fieldset>
+    <legend>Formato</legend>
+    <div class="row">
+      <div class="field-row"><input type="radio" name="format" id="f-mp3" value="mp3" checked><label for="f-mp3">MP3</label></div>
+      <div class="field-row"><input type="radio" name="format" id="f-m4a" value="m4a"><label for="f-m4a">M4A</label></div>
+      <div class="field-row"><input type="radio" name="format" id="f-wav" value="wav"><label for="f-wav">WAV</label></div>
+      <div class="field-row"><input type="radio" name="format" id="f-mp4" value="mp4"><label for="f-mp4">MP4 (vídeo)</label></div>
+      <div class="field-row"><input type="radio" name="format" id="f-webm" value="webm"><label for="f-webm">WEBM (vídeo)</label></div>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <div class="field-row" id="opt-bitrate">
+        <label for="bitrate">Qualidade MP3:</label>
+        <select id="bitrate"><option value="320">320 kbps</option><option value="256">256 kbps</option><option value="192">192 kbps</option><option value="128">128 kbps</option></select>
+      </div>
+      <div class="field-row" id="opt-quality" hidden>
+        <label for="quality">Resolução máx.:</label>
+        <select id="quality"><option value="best">Melhor</option><option value="2160">4K</option><option value="1440">1440p</option><option value="1080" selected>1080p</option><option value="720">720p</option><option value="480">480p</option><option value="360">360p</option></select>
+      </div>
+      <div class="field-row"><input type="checkbox" id="playlist"><label for="playlist">Baixar playlist inteira</label></div>
+    </div>
+  </fieldset>
+
+  <div class="row">
+    <button type="submit" class="default" id="go">⬇ Baixar</button>
+    <button type="button" id="folder">📂 Abrir pasta</button>
+    <span class="grow"></span>
+    <button type="button" id="upd" title="O YouTube muda com frequência; atualize se algum download falhar">Atualizar yt-dlp</button>
+  </div>
+  <p id="msg"></p>
+</form>
+<div id="jobs" style="margin-top:10px"></div>
+
+<script type="module">
+import { post, trackJob, openOutput } from "/assets/jobs98.js";
+const $ = id => document.getElementById(id);
+const fmt = () => document.querySelector("input[name=format]:checked").value;
+
+document.querySelectorAll("input[name=format]").forEach(r => r.onchange = () => {
+  const video = ["mp4", "webm"].includes(fmt());
+  $("opt-quality").hidden = !video;
+  $("opt-bitrate").hidden = fmt() !== "mp3";
+});
+$("paste").onclick = async () => { try { $("url").value = (await navigator.clipboard.readText()).trim(); } catch { $("url").focus(); } };
+$("folder").onclick = openOutput;
+$("upd").onclick = async () => {
+  $("upd").disabled = true; $("msg").textContent = "Atualizando yt-dlp…";
+  try { const r = await post("/api/tools/update"); $("msg").textContent = r.output || "Pronto."; }
+  catch (e) { $("msg").textContent = e.message; }
+  $("upd").disabled = false;
+};
+
+$("form").onsubmit = async e => {
+  e.preventDefault();
+  $("msg").textContent = "";
+  const url = $("url").value.trim();
+  try {
+    const { id } = await post("/api/youtube", {
+      url, format: fmt(), quality: $("quality").value, bitrate: $("bitrate").value, playlist: $("playlist").checked,
+    });
+    $("url").value = "";
+    trackJob($("jobs"), id, `${fmt().toUpperCase()} · ${url}`);
+  } catch (err) {
+    $("msg").innerHTML = `<span class="error">✖ ${err.message}</span>`;
+  }
+};
+</script>
+</body></html>

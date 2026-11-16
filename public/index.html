@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toolbox</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧰</text></svg>">
+<link rel="stylesheet" href="/vendor/98/98.css">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="#/" class="brand">🧰 <b>Toolbox</b></a>
+    <div class="spacer"></div>
+    <button id="btn-update" hidden>🔄 Atualização disponível</button>
+    <button id="btn-folder" title="Abrir a pasta onde os arquivos são salvos">📂 Pasta de saída</button>
+  </header>
+
+  <div class="layout">
+    <aside class="window sidebar">
+      <div class="title-bar"><div class="title-bar-text">Programas</div></div>
+      <div class="window-body">
+        <input id="search" type="text" placeholder="Buscar…" aria-label="Buscar">
+        <nav id="nav" class="sunken-panel"></nav>
+      </div>
+    </aside>
+
+    <section class="window main" id="main">
+      <div class="title-bar">
+        <div class="title-bar-text" id="main-title">Início</div>
+        <div class="title-bar-controls">
+          <button aria-label="Maximize" id="btn-max" title="Tela cheia"></button>
+          <button aria-label="Close" id="btn-close" title="Voltar ao início"></button>
+        </div>
+      </div>
+      <div class="window-body" id="main-body"></div>
+    </section>
+  </div>
+
+  <footer class="status-bar">
+    <p class="status-bar-field" id="st-version">versão —</p>
+    <p class="status-bar-field" id="st-tools">verificando ferramentas…</p>
+    <p class="status-bar-field" id="st-jobs">nenhuma tarefa</p>
+  </footer>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

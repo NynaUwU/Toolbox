@@ -1,1 +1,1 @@
-{ "title": "Gerador de senhas", "description": "Senhas fortes geradas localmente com crypto.getRandomValues.", "icon": "🔐", "tags": ["segurança", "utilitário"] }
+{ "title": "Gerador de senhas", "description": "Senhas fortes geradas localmente com crypto.getRandomValues.", "icon": "🔐",   "order": 20 }

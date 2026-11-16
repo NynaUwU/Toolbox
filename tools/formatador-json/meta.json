@@ -1,1 +1,1 @@
-{ "title": "Formatador de JSON", "description": "Valida, formata e minifica JSON.", "icon": "🧾", "tags": ["dev", "utilitário"] }
+{ "title": "Formatador de JSON", "description": "Valida, formata e minifica JSON.", "icon": "🧾",   "order": 20 }

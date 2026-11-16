@@ -1,3 +1,7 @@
-catalog.json
 node_modules/
+bin/
+tmp/
+data/
+output/
+catalog.json
 .DS_Store
