@@ -1,8 +1,9 @@
+Output/
 runtime/
 bin/
 tmp/
 data/
 output/
 Toolbox.bat.new
-.DS_Store
 node_modules/.bin/
+.DS_Store

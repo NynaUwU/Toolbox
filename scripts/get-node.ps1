@@ -1,10 +1,11 @@
-# Baixa o Node.js PORTATIL (zip oficial) para runtime\node. Nao instala nada no Windows.
+# Baixa o Node.js PORTATIL (zip oficial) para Output\_sistema\runtime\node. Nao instala nada no Windows.
+param([string]$Dest)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'   # deixa o download muito mais rapido no PowerShell 5
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $root    = Split-Path $PSScriptRoot -Parent
-$runtime = Join-Path $root 'runtime'
+$runtime = if ($Dest) { $Dest } else { Join-Path $root 'Output\_sistema\runtime' }
 $target  = Join-Path $runtime 'node'
 $arch    = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
 
@@ -23,4 +24,4 @@ if (Test-Path $target) { Remove-Item $target -Recurse -Force }
 Expand-Archive -Path $zip -DestinationPath $runtime -Force
 Rename-Item (Join-Path $runtime $name) 'node'
 Remove-Item $zip -Force
-Write-Host "   Node.js $version pronto em runtime\node"
+Write-Host "   Node.js $version pronto em $target"

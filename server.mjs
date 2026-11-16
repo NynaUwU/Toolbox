@@ -4,7 +4,7 @@ import multer from "multer";
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFile } from "node:child_process";
-import { ROOT, OUTPUT, TMP, DATA, IS_WIN, findTool, insideDir, safeName, uniquePath } from "./lib/paths.mjs";
+import { ROOT, OUTPUT, TMP, DATA, IS_WIN, findTool, insideDir, safeName, uniquePath, outDir } from "./lib/paths.mjs";
 import { createJob, getJob, listJobs, finishJob, hasRunning } from "./lib/jobs.mjs";
 import { GROUPS, groupFor, convert } from "./lib/convert.mjs";
 import { download, FORMATS, listPlaylist } from "./lib/youtube.mjs";
@@ -196,7 +196,7 @@ app.post("/api/save-image", express.raw({ type: "image/*", limit: "300mb" }), (r
   const ext = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" }[req.get("content-type")];
   if (!ext || !req.body?.length) return res.status(400).json({ error: "Imagem inválida." });
   const base = safeName(String(req.query.name || "imagem").replace(/\.[a-z0-9]+$/i, ""));
-  const out = uniquePath(OUTPUT, base, ext);
+  const out = uniquePath(outDir("Imagens"), base, ext);
   fs.writeFileSync(out, req.body);
   res.json({ file: path.relative(OUTPUT, out) });
 });
