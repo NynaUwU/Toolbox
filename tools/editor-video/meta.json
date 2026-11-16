@@ -1,0 +1,7 @@
+{
+  "title": "Editor de vídeo",
+  "description": "Corte trechos (manter ou remover), recorte a área do quadro, gire, reduza, tire o áudio e exporte em MP4, WEBM, GIF ou MP3.",
+  "icon": "🎬",
+  "category": "Edição de mídia",
+  "order": 2
+}

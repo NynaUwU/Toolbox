@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor de vídeo</title>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/table98.js" defer></script>
+<style>
+  html, body { height: 100%; }
+  body { display: flex; flex-direction: column; gap: 6px; padding: 6px; overflow: hidden; }
+  .top { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .work { flex: 1; display: flex; gap: 6px; min-height: 0; }
+  .left { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .side { width: 290px; flex: none; overflow-y: auto; }
+  #screen { flex: 1; position: relative; background: #000; min-height: 200px; overflow: hidden; }
+  #screen video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+  #drop { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #ccc; text-align: center; font-size: 13px; }
+  #drop.over { background: #000080; color: #fff; }
+  #cropLayer { position: absolute; inset: 0; cursor: crosshair; }
+  #cropBox { position: absolute; border: 2px dashed #fff; box-shadow: 0 0 0 9999px rgba(0,0,0,.5); cursor: move; }
+  #cropBox i { position: absolute; width: 10px; height: 10px; background: #fff; border: 1px solid #000; }
+  #cropBox i[data-h="0"] { left: -6px; top: -6px; cursor: nwse-resize; } #cropBox i[data-h="1"] { right: -6px; top: -6px; cursor: nesw-resize; }
+  #cropBox i[data-h="2"] { left: -6px; bottom: -6px; cursor: nesw-resize; } #cropBox i[data-h="3"] { right: -6px; bottom: -6px; cursor: nwse-resize; }
+  .transport { display: flex; gap: 3px; align-items: center; flex-wrap: wrap; }
+  .transport button { min-width: 0; padding: 0 8px; }
+  #time { font-family: "Courier New", monospace; font-size: 13px; margin-left: 6px; }
+  #tl { width: 100%; height: 46px; display: block; cursor: pointer; background: #fff; }
+  .side fieldset { margin-bottom: 6px; }
+  .side .field-row { margin: 3px 0; }
+  #segs td { font-family: "Courier New", monospace; }
+  #segs td:last-child { text-align: right; }
+  [hidden] { display: none !important; }
+</style>
+</head><body>
+<div class="top">
+  <button id="open">📂 Abrir vídeo</button>
+  <input type="file" id="file" accept="video/*,.mkv,.avi,.flv,.wmv,.mts,.m2ts,.3gp,.ts" hidden>
+  <span id="info" class="muted">Nenhum vídeo aberto.</span>
+  <div class="progress-indicator segmented" id="upBar" hidden style="width:200px"><span class="progress-indicator-bar" style="width:0%"></span></div>
+</div>
+
+<div class="work">
+  <div class="left">
+    <div id="screen" class="sunken-panel">
+      <video id="v" preload="auto" playsinline></video>
+      <div id="cropLayer" hidden><div id="cropBox" hidden><i data-h="0"></i><i data-h="1"></i><i data-h="2"></i><i data-h="3"></i></div></div>
+      <div id="drop">Arraste um vídeo aqui ou clique em 📂 Abrir vídeo<br>(MP4, MKV, AVI, MOV, WEBM…)</div>
+    </div>
+    <div class="transport">
+      <button id="bStart" title="Início (Home)">⏮</button>
+      <button id="bBack" title="−5 s (Shift+←)">−5s</button>
+      <button id="bFrameB" title="Quadro anterior (←)">◀|</button>
+      <button id="bPlay" title="Tocar/pausar (Espaço)" style="width:60px">▶</button>
+      <button id="bFrameF" title="Próximo quadro (→)">|▶</button>
+      <button id="bFwd" title="+5 s (Shift+→)">+5s</button>
+      <button id="bEnd" title="Fim (End)">⏭</button>
+      <span id="time">00:00.00 / 00:00.00</span>
+      <span style="flex:1"></span>
+      <button id="bIn" title="Marcar início do trecho (I)">[ Início</button>
+      <button id="bOut" title="Marcar fim do trecho (O)">Fim ]</button>
+      <button id="bAdd" class="default" title="Adicionar trecho marcado (A)">➕ Trecho</button>
+      <button id="bShot" title="Salvar o quadro atual como imagem">📷 Quadro</button>
+    </div>
+    <canvas id="tl" class="sunken-panel" title="Clique ou arraste para navegar"></canvas>
+  </div>
+
+  <div class="side">
+    <fieldset><legend>Trechos</legend>
+      <div class="field-row"><input type="radio" name="mode" id="mKeep" value="keep" checked><label for="mKeep">Manter só os trechos</label></div>
+      <div class="field-row"><input type="radio" name="mode" id="mCut" value="cut"><label for="mCut">Remover os trechos</label></div>
+      <div class="sunken-panel" style="max-height:150px;overflow:auto;margin-top:4px">
+        <table class="interactive" style="width:100%"><tbody id="segs"><tr><td class="muted">Nenhum trecho: exporta o vídeo inteiro.</td></tr></tbody></table>
+      </div>
+      <p class="muted" id="segHint">Marque [ Início e Fim ] com o vídeo parado e clique em ➕ Trecho.</p>
+    </fieldset>
+
+    <fieldset><legend>Recortar área do quadro</legend>
+      <div class="field-row"><input type="checkbox" id="cropOn"><label for="cropOn">Recortar</label></div>
+      <div id="cropOpts" hidden>
+        <select id="ratio" style="width:100%"><option value="0">Livre</option><option value="1.7778">16:9</option><option value="0.5625">9:16 (vertical / stories)</option><option value="1">1:1</option><option value="1.3333">4:3</option><option value="0.8">4:5</option></select>
+        <p class="muted" id="cropInfo">Arraste sobre o vídeo para marcar a área.</p>
+      </div>
+    </fieldset>
+
+    <fieldset><legend>Ajustes</legend>
+      <div class="field-row"><label for="rot" style="width:70px">Girar</label><select id="rot"><option value="0">Não</option><option value="90">90° horário</option><option value="180">180°</option><option value="270">90° anti-horário</option></select></div>
+      <div class="field-row"><label for="scale" style="width:70px">Altura</label><select id="scale"><option value="0">Original</option><option value="2160">2160p (4K)</option><option value="1080">1080p</option><option value="720">720p</option><option value="480">480p</option><option value="360">360p</option></select></div>
+      <div class="field-row"><input type="checkbox" id="mute"><label for="mute">Remover áudio</label></div>
+    </fieldset>
+
+    <fieldset><legend>Exportar</legend>
+      <div class="field-row"><label for="fmt" style="width:70px">Formato</label><select id="fmt"><option value="mp4">MP4 (H.264)</option><option value="webm">WEBM (VP9)</option><option value="gif">GIF animado</option><option value="mp3">MP3 (só áudio)</option></select></div>
+      <div id="gifOpts" hidden>
+        <div class="field-row"><label for="gfps" style="width:70px">FPS</label><input id="gfps" type="number" value="12" min="1" max="30" style="width:60px"></div>
+        <div class="field-row"><label for="gw" style="width:70px">Largura</label><input id="gw" type="number" value="480" min="64" max="1280" step="10" style="width:60px"> px</div>
+      </div>
+      <p class="muted" id="outInfo"></p>
+      <div class="row"><button id="export" class="default" disabled>▶ Exportar</button><button id="folder">📂 Pasta</button></div>
+    </fieldset>
+    <div id="jobs"></div>
+  </div>
+</div>
+
+<script type="module">
+import { api, post, trackJob, openOutput } from "/assets/jobs98.js";
+const $ = id => document.getElementById(id);
+const v = $("v"), tl = $("tl");
+let rec = null, segs = [], markIn = null, markOut = null, crop = null;
+const fmtT = t => { if (!isFinite(t)) t = 0; const m = Math.floor(t / 60), s = t - m * 60; return `${String(m).padStart(2, "0")}:${s.toFixed(2).padStart(5, "0")}`; };
+const fps = () => rec?.fps || 30;
+
+// ================= Abrir =================
+$("open").onclick = () => $("file").click();
+$("file").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if (f) upload(f); };
+const screen = $("screen");
+screen.addEventListener("dragover", e => { e.preventDefault(); $("drop").classList.add("over"); });
+screen.addEventListener("dragleave", () => $("drop").classList.remove("over"));
+screen.addEventListener("drop", e => { e.preventDefault(); $("drop").classList.remove("over"); const f = e.dataTransfer.files[0]; if (f) upload(f); });
+
+function upload(file) {
+  $("upBar").hidden = false; $("info").textContent = `Enviando ${file.name}…`;
+  const xhr = new XMLHttpRequest(), fd = new FormData(); fd.append("file", file);
+  xhr.upload.onprogress = e => { if (e.lengthComputable) $("upBar").firstElementChild.style.width = `${e.loaded / e.total * 100}%`; };
+  xhr.onload = async () => {
+    $("upBar").hidden = true;
+    let j = {}; try { j = JSON.parse(xhr.responseText); } catch {}
+    if (xhr.status !== 200) { $("info").innerHTML = `<span class="error">✖ ${j.error || "Falha no envio"}</span>`; return; }
+    rec = j; segs = []; markIn = markOut = null; crop = null; $("cropOn").checked = false; updCrop(); renderSegs();
+    $("info").textContent = `${rec.name} · ${rec.width}×${rec.height} · ${fmtT(rec.duration)} · ${Math.round(rec.fps)} fps${rec.hasAudio ? "" : " · sem áudio"}`;
+    if (j.previewJob) {
+      $("drop").hidden = false; $("drop").textContent = "Preparando a prévia…";
+      const job = await trackJob($("jobs"), j.previewJob, "Prévia");
+      if (job.status !== "done") return;
+    }
+    $("drop").hidden = true;
+    v.src = `/api/video/${rec.id}/media?t=${Date.now()}`;
+    $("export").disabled = false; updOut();
+  };
+  xhr.onerror = () => { $("upBar").hidden = true; $("info").innerHTML = '<span class="error">✖ Falha no envio</span>'; };
+  xhr.open("POST", "/api/video/upload"); xhr.send(fd);
+}
+
+// ================= Reprodução =================
+const play = () => (v.paused ? v.play() : v.pause());
+$("bPlay").onclick = play;
+v.onplay = v.onpause = () => ($("bPlay").textContent = v.paused ? "▶" : "⏸");
+const seek = t => { if (rec) v.currentTime = Math.max(0, Math.min(rec.duration, t)); };
+$("bStart").onclick = () => seek(0); $("bEnd").onclick = () => seek(rec?.duration || 0);
+$("bBack").onclick = () => seek(v.currentTime - 5); $("bFwd").onclick = () => seek(v.currentTime + 5);
+$("bFrameB").onclick = () => { v.pause(); seek(v.currentTime - 1 / fps()); };
+$("bFrameF").onclick = () => { v.pause(); seek(v.currentTime + 1 / fps()); };
+v.ontimeupdate = () => { $("time").textContent = `${fmtT(v.currentTime)} / ${fmtT(rec?.duration)}`; drawTl(); };
+v.onloadedmetadata = () => { updCrop(); drawTl(); };
+
+// ================= Trechos =================
+$("bIn").onclick = () => { markIn = v.currentTime; if (markOut != null && markOut <= markIn) markOut = null; drawTl(); hintSeg(); };
+$("bOut").onclick = () => { markOut = v.currentTime; if (markIn != null && markIn >= markOut) markIn = null; drawTl(); hintSeg(); };
+$("bAdd").onclick = () => {
+  if (!rec) return;
+  const a = markIn ?? 0, b = markOut ?? rec.duration;
+  if (b - a < 0.05) return alert("Marque um início antes do fim.");
+  segs.push([a, b]); segs.sort((x, y) => x[0] - y[0]); markIn = markOut = null; renderSegs(); drawTl(); hintSeg();
+};
+function hintSeg() { $("segHint").textContent = `Marcado: ${markIn != null ? fmtT(markIn) : "início do vídeo"} → ${markOut != null ? fmtT(markOut) : "fim do vídeo"}`; }
+function renderSegs() {
+  $("segs").innerHTML = segs.length ? segs.map(([a, b], i) => `<tr><td>${fmtT(a)} → ${fmtT(b)}</td><td><button class="link" data-go="${i}">ver</button> <button class="link" data-del="${i}">✖</button></td></tr>`).join("")
+    : `<tr><td class="muted">Nenhum trecho: exporta o vídeo inteiro.</td></tr>`;
+  $("segs").querySelectorAll("[data-go]").forEach(b => b.onclick = () => seek(segs[b.dataset.go][0]));
+  $("segs").querySelectorAll("[data-del]").forEach(b => b.onclick = () => { segs.splice(b.dataset.del, 1); renderSegs(); drawTl(); });
+  updOut();
+}
+document.querySelectorAll("input[name=mode]").forEach(r => r.onchange = () => { drawTl(); updOut(); });
+const mode = () => document.querySelector("input[name=mode]:checked").value;
+
+/** Trechos que vão para o arquivo final (no modo “remover”, o complemento). */
+function keepSegments() {
+  if (!rec) return [];
+  const merged = [];
+  for (const [a, b] of [...segs].sort((x, y) => x[0] - y[0])) {
+    if (merged.length && a <= merged.at(-1)[1]) merged.at(-1)[1] = Math.max(merged.at(-1)[1], b); else merged.push([a, b]);
+  }
+  if (mode() === "keep") return merged.length ? merged : [[0, rec.duration]];
+  const out = []; let t = 0;
+  for (const [a, b] of merged) { if (a - t > 0.05) out.push([t, a]); t = b; }
+  if (rec.duration - t > 0.05) out.push([t, rec.duration]);
+  return out;
+}
+
+// ================= Linha do tempo =================
+function drawTl() {
+  const dpr = devicePixelRatio || 1, W = tl.clientWidth, H = tl.clientHeight;
+  if (tl.width !== W * dpr) { tl.width = W * dpr; tl.height = H * dpr; }
+  const g = tl.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  if (!rec) return;
+  const X = t => t / rec.duration * W;
+  g.fillStyle = "#e8e8e8"; g.fillRect(0, 14, W, H - 20);
+  if (segs.length) {
+    for (const [a, b] of segs) { g.fillStyle = mode() === "keep" ? "#3cb043" : "#d03b3b"; g.fillRect(X(a), 14, Math.max(1, X(b) - X(a)), H - 20); }
+    if (mode() === "cut") { g.fillStyle = "rgba(60,176,67,.35)"; for (const [a, b] of keepSegments()) g.fillRect(X(a), H - 10, X(b) - X(a), 4); }
+  } else { g.fillStyle = "rgba(60,176,67,.35)"; g.fillRect(0, 14, W, H - 20); }
+  // marcações de tempo
+  g.fillStyle = "#000"; g.font = "10px Tahoma"; const step = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600].find(s => rec.duration / s < W / 60) || 1200;
+  for (let t = 0; t <= rec.duration; t += step) { g.fillRect(X(t), 0, 1, 6); g.fillText(fmtT(t).replace(/\.\d\d$/, ""), X(t) + 2, 10); }
+  // início / fim marcados
+  g.fillStyle = "#000080";
+  if (markIn != null) { g.fillRect(X(markIn) - 1, 12, 3, H - 14); g.fillText("[", X(markIn) + 3, H - 8); }
+  if (markOut != null) { g.fillRect(X(markOut) - 1, 12, 3, H - 14); g.fillText("]", X(markOut) - 8, H - 8); }
+  if (markIn != null || markOut != null) { g.fillStyle = "rgba(0,0,128,.25)"; g.fillRect(X(markIn ?? 0), 14, X(markOut ?? rec.duration) - X(markIn ?? 0), H - 20); }
+  // cursor
+  g.fillStyle = "#ff0000"; g.fillRect(X(v.currentTime) - 1, 0, 2, H);
+}
+let tlDrag = false;
+const tlSeek = e => { if (!rec) return; const r = tl.getBoundingClientRect(); seek((e.clientX - r.left) / r.width * rec.duration); };
+tl.addEventListener("pointerdown", e => { tlDrag = true; tl.setPointerCapture(e.pointerId); tlSeek(e); });
+tl.addEventListener("pointermove", e => { if (tlDrag) tlSeek(e); });
+tl.addEventListener("pointerup", () => (tlDrag = false));
+addEventListener("resize", () => { drawTl(); updCrop(); });
+
+// ================= Recorte de área =================
+// Coordenadas do recorte em pixels do vídeo ORIGINAL; a tela pode mostrar uma prévia menor.
+function displayRect() {
+  const W = screen.clientWidth, H = screen.clientHeight, vw = rec?.width || 16, vh = rec?.height || 9;
+  const k = Math.min(W / vw, H / vh); return { x: (W - vw * k) / 2, y: (H - vh * k) / 2, w: vw * k, h: vh * k, k };
+}
+function updCrop() {
+  const on = $("cropOn").checked && rec;
+  $("cropOpts").hidden = !on; $("cropLayer").hidden = !on;
+  const box = $("cropBox");
+  if (!on || !crop) { box.hidden = true; $("cropInfo").textContent = "Arraste sobre o vídeo para marcar a área."; updOut(); return; }
+  const d = displayRect();
+  box.hidden = false;
+  Object.assign(box.style, { left: d.x + crop.x * d.k + "px", top: d.y + crop.y * d.k + "px", width: crop.w * d.k + "px", height: crop.h * d.k + "px" });
+  $("cropInfo").textContent = `${Math.round(crop.w)} × ${Math.round(crop.h)} px a partir de (${Math.round(crop.x)}, ${Math.round(crop.y)})`;
+  updOut();
+}
+$("cropOn").onchange = () => { if ($("cropOn").checked && rec && !crop) crop = { x: rec.width * 0.1, y: rec.height * 0.1, w: rec.width * 0.8, h: rec.height * 0.8 }; applyRatio(); updCrop(); };
+$("ratio").onchange = () => { applyRatio(); updCrop(); };
+function applyRatio() {
+  const r = +$("ratio").value; if (!r || !crop) return;
+  let w = crop.w, h = w / r; if (h > rec.height) { h = rec.height; w = h * r; } if (w > rec.width) { w = rec.width; h = w / r; }
+  crop = { x: Math.min(crop.x, rec.width - w), y: Math.min(crop.y, rec.height - h), w, h };
+}
+let cd = null;
+const vidPt = e => { const d = displayRect(), r = screen.getBoundingClientRect(); return { x: Math.max(0, Math.min(rec.width, (e.clientX - r.left - d.x) / d.k)), y: Math.max(0, Math.min(rec.height, (e.clientY - r.top - d.y) / d.k)) }; };
+$("cropLayer").addEventListener("pointerdown", e => {
+  if (!rec) return; e.preventDefault(); $("cropLayer").setPointerCapture(e.pointerId);
+  const p = vidPt(e), h = e.target.dataset?.h;
+  if (h != null) cd = { kind: "resize", h: +h, s: { ...crop } };
+  else if (e.target === $("cropBox")) cd = { kind: "move", dx: p.x - crop.x, dy: p.y - crop.y };
+  else cd = { kind: "new", a: p };
+});
+$("cropLayer").addEventListener("pointermove", e => {
+  if (!cd) return; const p = vidPt(e), r = +$("ratio").value;
+  if (cd.kind === "move") { crop.x = Math.max(0, Math.min(rec.width - crop.w, p.x - cd.dx)); crop.y = Math.max(0, Math.min(rec.height - crop.h, p.y - cd.dy)); }
+  else {
+    const a = cd.kind === "new" ? cd.a : { x: cd.h % 2 ? cd.s.x : cd.s.x + cd.s.w, y: cd.h < 2 ? cd.s.y + cd.s.h : cd.s.y };
+    let w = Math.abs(p.x - a.x), h = Math.abs(p.y - a.y);
+    if (r) { if (w / r > h) h = w / r; else w = h * r; }
+    let x = p.x < a.x ? a.x - w : a.x, y = p.y < a.y ? a.y - h : a.y;
+    if (x < 0 || y < 0 || x + w > rec.width || y + h > rec.height) return;
+    crop = { x, y, w: Math.max(16, w), h: Math.max(16, h) };
+  }
+  updCrop();
+});
+$("cropLayer").addEventListener("pointerup", () => (cd = null));
+
+// ================= Saída =================
+$("fmt").onchange = () => { $("gifOpts").hidden = $("fmt").value !== "gif"; updOut(); };
+["rot", "scale", "mute", "gfps", "gw"].forEach(id => $(id).addEventListener("change", updOut));
+function updOut() {
+  if (!rec) return ($("outInfo").textContent = "");
+  const total = keepSegments().reduce((s, [a, b]) => s + b - a, 0);
+  let w = crop && $("cropOn").checked ? crop.w : rec.width, h = crop && $("cropOn").checked ? crop.h : rec.height;
+  if (["90", "270"].includes($("rot").value)) [w, h] = [h, w];
+  const sc = +$("scale").value; if (sc && $("fmt").value !== "gif") { w = w * sc / h; h = sc; }
+  if ($("fmt").value === "gif") { const gw = +$("gw").value; h = h * gw / w; w = gw; }
+  $("outInfo").textContent = `Resultado: ${fmtT(total)}${$("fmt").value === "mp3" ? "" : ` · ${Math.round(w / 2) * 2}×${Math.round(h / 2) * 2}`} · ${keepSegments().length} trecho(s)`;
+}
+$("export").onclick = async () => {
+  if (!rec) return;
+  const body = { segments: keepSegments(), crop: $("cropOn").checked ? crop : null, rotate: +$("rot").value, scale: +$("scale").value,
+    mute: $("mute").checked, format: $("fmt").value, gifFps: $("gfps").value, gifWidth: $("gw").value };
+  try { const { id } = await post(`/api/video/${rec.id}/export`, body); trackJob($("jobs"), id, `Exportar ${$("fmt").value.toUpperCase()}`); }
+  catch (e) { alert(e.message); }
+};
+$("folder").onclick = openOutput;
+
+// ================= Quadro como imagem =================
+$("bShot").onclick = async () => {
+  if (!rec || !v.videoWidth) return;
+  const c = document.createElement("canvas"); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext("2d").drawImage(v, 0, 0);
+  const blob = await new Promise(ok => c.toBlob(ok, "image/png"));
+  const name = `${rec.name.replace(/\.[^.]+$/, "")} - quadro ${fmtT(v.currentTime).replace(":", "m").replace(".", "s")}`;
+  const r = await fetch(`/api/save-image?name=${encodeURIComponent(name)}`, { method: "POST", headers: { "Content-Type": "image/png" }, body: blob });
+  const j = await r.json();
+  const div = document.createElement("fieldset"); div.className = "job";
+  div.innerHTML = `<legend>📷 Quadro ${fmtT(v.currentTime)}</legend>💾 <a href="/api/files?f=${encodeURIComponent(j.file)}" download>${j.file}</a><br><button class="link" id="toEditor">abrir no Editor de imagens</button>`;
+  $("jobs").prepend(div);
+  div.querySelector("#toEditor").onclick = () => { try { sessionStorage.setItem("editor-open", j.file); } catch {} top.location.hash = "#/tools/editor-imagem/"; };
+};
+
+// ================= Teclado =================
+addEventListener("keydown", e => {
+  if (e.target.matches("input, select") || !rec) return;
+  const k = e.key.toLowerCase();
+  if (e.key === " ") { e.preventDefault(); play(); }
+  else if (e.key === "ArrowLeft") { e.preventDefault(); e.shiftKey ? $("bBack").click() : $("bFrameB").click(); }
+  else if (e.key === "ArrowRight") { e.preventDefault(); e.shiftKey ? $("bFwd").click() : $("bFrameF").click(); }
+  else if (e.key === "Home") seek(0); else if (e.key === "End") seek(rec.duration);
+  else if (k === "i") $("bIn").click(); else if (k === "o") $("bOut").click(); else if (k === "a") $("bAdd").click();
+});
+drawTl();
+</script>
+</body></html>

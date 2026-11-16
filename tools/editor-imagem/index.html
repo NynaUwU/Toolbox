@@ -1,0 +1,587 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor de imagens</title>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css">
+<style>
+  html, body { height: 100%; overflow: hidden; }
+  body { display: flex; flex-direction: column; gap: 4px; padding: 4px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+  .bar button { min-width: 0; padding: 0 7px; }
+  .sep { width: 2px; height: 20px; border-left: 1px solid #808080; border-right: 1px solid #fff; margin: 0 3px; }
+  .work { flex: 1; display: flex; gap: 4px; min-height: 0; }
+  .tools { display: grid; grid-template-columns: 34px 34px; gap: 2px; align-content: start; }
+  .tools button { min-width: 0; width: 34px; height: 34px; padding: 0; font-size: 16px; }
+  .tools button.on { box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px grey;
+    background: repeating-conic-gradient(#c0c0c0 0 25%, #fff 0 50%) 0 0/2px 2px; }
+  #stage { flex: 1; overflow: auto; position: relative; background: #808080; }
+  #wrap { position: relative; margin: 20px; display: inline-block; box-shadow: 3px 3px 0 rgba(0,0,0,.4);
+    background: repeating-conic-gradient(#ddd 0 25%, #fff 0 50%) 0 0/16px 16px; }
+  #wrap canvas { position: absolute; left: 0; top: 0; display: block; }
+  #wrap canvas#base { position: relative; }
+  #wrap.pixel canvas { image-rendering: pixelated; }
+  #over { pointer-events: none; }
+  .empty-msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; text-align: center; pointer-events: none; }
+  .side { width: 210px; flex: none; overflow-y: auto; }
+  .side fieldset { margin-bottom: 6px; }
+  .side .field-row { margin: 4px 0; }
+  .side input[type=range] { width: 100%; }
+  .tips { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; }
+  .tips button { min-width: 0; padding: 2px; height: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 10px; }
+  .tips button.on { box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px grey; font-weight: bold; }
+  .colors { display: flex; gap: 8px; align-items: center; }
+  .cbox { position: relative; width: 52px; height: 44px; }
+  .cbox input { position: absolute; width: 30px; height: 26px; padding: 0; border: 2px solid #000; }
+  #c1 { left: 0; top: 0; z-index: 2; } #c2 { left: 18px; top: 16px; }
+  .palette { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; margin-top: 6px; }
+  .palette span { height: 16px; border: 1px solid #000; cursor: pointer; }
+  .opt[hidden] { display: none !important; }
+  .val { float: right; font-weight: bold; }
+  #handles { position: absolute; inset: 0; pointer-events: none; }
+</style>
+</head><body>
+<div class="bar">
+  <button id="open" title="Abrir imagem (Ctrl+O)">📂 Abrir</button>
+  <button id="new" title="Nova imagem em branco">🆕 Nova</button>
+  <span class="sep"></span>
+  <button id="undo" title="Desfazer (Ctrl+Z)" disabled>↶</button>
+  <button id="redo" title="Refazer (Ctrl+Y)" disabled>↷</button>
+  <span class="sep"></span>
+  <button id="rotL" title="Girar 90° à esquerda">⟲</button>
+  <button id="rotR" title="Girar 90° à direita">⟳</button>
+  <button id="flipH" title="Espelhar na horizontal">⇋</button>
+  <button id="flipV" title="Espelhar na vertical">⇵</button>
+  <button id="resize" title="Redimensionar">⤡ Tamanho</button>
+  <span class="sep"></span>
+  <button id="zOut" title="Diminuir zoom (−)">−</button>
+  <button id="zFit" title="Ajustar à tela (0)">Ajustar</button>
+  <button id="z100" title="Tamanho real (1)">100%</button>
+  <button id="zIn" title="Aumentar zoom (+)">+</button>
+  <span class="sep"></span>
+  <select id="fmt" title="Formato"><option value="png">PNG</option><option value="jpg">JPG</option><option value="webp">WEBP</option></select>
+  <button id="save" title="Salvar na pasta de saída (Ctrl+S)">💾 Salvar</button>
+  <button id="download" title="Baixar pelo navegador">⬇ Baixar</button>
+  <span id="msg" class="muted"></span>
+  <input type="file" id="file" accept="image/*" hidden><input type="file" id="file2" accept="image/*" hidden>
+</div>
+
+<div class="work">
+  <div class="tools" id="tools">
+    <button data-tool="brush" title="Pincel (B)">🖌️</button>
+    <button data-tool="eraser" title="Borracha (E)">🧽</button>
+    <button data-tool="picker" title="Conta-gotas (I) — ou Alt+clique com o pincel">💧</button>
+    <button data-tool="blur" title="Borrar / pixelar (U)">🌫️</button>
+    <button data-tool="rect" title="Retângulo / quadrado (R) — Shift = quadrado">▭</button>
+    <button data-tool="ellipse" title="Elipse / círculo (O) — Shift = círculo">◯</button>
+    <button data-tool="crop" title="Recortar (C)">✂️</button>
+    <button data-tool="insert" title="Imagem por cima (V)">🖼️</button>
+    <button data-tool="pan" title="Mover a visão (H) — ou segure Espaço">✋</button>
+  </div>
+
+  <div id="stage">
+    <div id="wrap"><canvas id="base" width="800" height="600"></canvas><canvas id="over" width="800" height="600"></canvas></div>
+    <div class="empty-msg" id="empty">Abra, arraste ou cole (Ctrl+V) uma imagem<br>— ou clique em 🆕 Nova.</div>
+  </div>
+
+  <div class="side">
+    <fieldset><legend>Cores</legend>
+      <div class="colors">
+        <div class="cbox"><input type="color" id="c1" value="#000000" title="Cor principal (contorno / pincel)"><input type="color" id="c2" value="#ffffff" title="Cor secundária (preenchimento)"></div>
+        <button id="swapC" title="Trocar (X)" style="min-width:0;padding:0 6px">⇄</button>
+        <span class="muted" id="hex">#000000</span>
+      </div>
+      <div class="palette" id="palette" title="Clique = principal · botão direito = secundária"></div>
+    </fieldset>
+
+    <fieldset class="opt" data-for="brush eraser blur"><legend id="tipLegend">Ponta</legend>
+      <div class="tips" id="tips"></div>
+    </fieldset>
+
+    <fieldset class="opt" data-for="brush eraser blur rect ellipse"><legend>Ajustes</legend>
+      <div class="opt" data-for="brush eraser blur"><label>Tamanho <span class="val" id="sizeV"></span></label><input type="range" id="size" min="1" max="300" value="16"></div>
+      <div class="opt" data-for="rect ellipse"><label>Espessura da borda <span class="val" id="lineV"></span></label><input type="range" id="line" min="1" max="60" value="4"></div>
+      <div class="opt" data-for="brush eraser rect ellipse"><label>Opacidade <span class="val" id="opV"></span></label><input type="range" id="op" min="1" max="100" value="100"></div>
+      <div class="opt" data-for="blur"><label>Intensidade <span class="val" id="strV"></span></label><input type="range" id="str" min="2" max="40" value="8"></div>
+    </fieldset>
+
+    <fieldset class="opt" data-for="blur"><legend>Borrar</legend>
+      <div class="field-row"><input type="radio" name="bmode" id="bm1" value="blur" checked><label for="bm1">Desfocar</label></div>
+      <div class="field-row"><input type="radio" name="bmode" id="bm2" value="pixel"><label for="bm2">Pixelar (censura)</label></div>
+      <div class="field-row"><input type="radio" name="bshape" id="bs1" value="brush" checked><label for="bs1">Com pincel</label></div>
+      <div class="field-row"><input type="radio" name="bshape" id="bs2" value="rect"><label for="bs2">Em uma área (retângulo)</label></div>
+    </fieldset>
+
+    <fieldset class="opt" data-for="rect ellipse"><legend>Preenchimento</legend>
+      <div class="field-row"><input type="radio" name="fill" id="f1" value="stroke" checked><label for="f1">Só contorno (vazado)</label></div>
+      <div class="field-row"><input type="radio" name="fill" id="f2" value="fill"><label for="f2">Cheio</label></div>
+      <div class="field-row"><input type="radio" name="fill" id="f3" value="both"><label for="f3">Cheio + contorno</label></div>
+      <p class="muted">Contorno = cor principal · cheio = cor secundária. Shift = quadrado/círculo perfeito.</p>
+    </fieldset>
+
+    <fieldset class="opt" data-for="crop"><legend>Recortar</legend>
+      <label for="ratio">Proporção</label>
+      <select id="ratio" style="width:100%"><option value="0">Livre</option><option value="1">1:1 (quadrado)</option><option value="1.3333">4:3</option><option value="1.7778">16:9</option><option value="0.5625">9:16 (stories)</option><option value="0.8">4:5</option></select>
+      <p id="cropInfo" class="muted">Arraste sobre a imagem.</p>
+      <div class="row"><button id="cropOk" class="default" disabled>✔ Aplicar</button><button id="cropCancel">Cancelar</button></div>
+    </fieldset>
+
+    <fieldset class="opt" data-for="insert"><legend>Imagem por cima</legend>
+      <button id="pickInsert" style="width:100%">📂 Escolher imagem…</button>
+      <p class="muted">Também dá para arrastar ou colar (Ctrl+V). Arraste para mover, puxe os cantos para redimensionar.</p>
+      <label>Opacidade <span class="val" id="insOpV"></span></label><input type="range" id="insOp" min="5" max="100" value="100">
+      <div class="field-row"><input type="checkbox" id="keepRatio" checked><label for="keepRatio">Manter proporção</label></div>
+      <div class="row"><button id="insOk" class="default" disabled>✔ Aplicar</button><button id="insCancel" disabled>Cancelar</button></div>
+    </fieldset>
+
+    <fieldset class="opt" data-for="picker"><legend>Conta-gotas</legend>
+      <label for="sample">Amostra</label>
+      <select id="sample" style="width:100%"><option value="1">1 pixel</option><option value="3">Média 3×3</option><option value="5">Média 5×5</option></select>
+      <div class="field-row"><input type="checkbox" id="pickBack" checked><label for="pickBack">Voltar à ferramenta anterior</label></div>
+    </fieldset>
+  </div>
+</div>
+
+<div class="status-bar">
+  <p class="status-bar-field" id="stPos">—</p>
+  <p class="status-bar-field" id="stSize">—</p>
+  <p class="status-bar-field" id="stZoom">100%</p>
+  <p class="status-bar-field" id="stHint" style="flex:3">Atalhos: B pincel · E borracha · I conta-gotas · U borrar · R/O formas · C recortar · [ ] tamanho · Ctrl+Z desfazer</p>
+</div>
+
+<script type="module">
+const $ = id => document.getElementById(id);
+const base = $("base"), over = $("over"), stage = $("stage"), wrap = $("wrap");
+const bctx = base.getContext("2d", { willReadFrequently: true }), octx = over.getContext("2d");
+let zoom = 1, tool = "brush", prevTool = "brush", tip = "round", docName = "imagem", hasDoc = false;
+const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+
+// ================= Documento, zoom, histórico =================
+function setSize(w, h) { base.width = over.width = w; base.height = over.height = h; $("stSize").textContent = `${w} × ${h} px`; applyZoom(); }
+function applyZoom() {
+  const w = Math.round(base.width * zoom), h = Math.round(base.height * zoom);
+  for (const c of [base, over]) { c.style.width = w + "px"; c.style.height = h + "px"; }
+  wrap.classList.toggle("pixel", zoom >= 2);
+  $("stZoom").textContent = Math.round(zoom * 100) + "%";
+}
+function fit() { zoom = Math.min(1, (stage.clientWidth - 50) / base.width, (stage.clientHeight - 50) / base.height); applyZoom(); }
+function setZoom(z, cx, cy) {
+  const r = stage.getBoundingClientRect();
+  const px = (cx ?? r.width / 2) + stage.scrollLeft - 20, py = (cy ?? r.height / 2) + stage.scrollTop - 20;
+  const k = Math.min(32, Math.max(0.05, z)) / zoom; zoom *= k; applyZoom();
+  stage.scrollLeft = px * k - (cx ?? r.width / 2) + 20; stage.scrollTop = py * k - (cy ?? r.height / 2) + 20;
+}
+const undoStack = [], redoStack = [], LIMIT = 600e6;
+const snap = () => ({ w: base.width, h: base.height, d: bctx.getImageData(0, 0, base.width, base.height) });
+function restore(s) { if (s.w !== base.width || s.h !== base.height) setSize(s.w, s.h); bctx.putImageData(s.d, 0, 0); }
+function pushUndo() {
+  undoStack.push(snap()); redoStack.length = 0;
+  let bytes = undoStack.reduce((t, s) => t + s.w * s.h * 4, 0);
+  while ((undoStack.length > 40 || bytes > LIMIT) && undoStack.length > 1) { const s = undoStack.shift(); bytes -= s.w * s.h * 4; }
+  updHist();
+}
+function updHist() { $("undo").disabled = !undoStack.length; $("redo").disabled = !redoStack.length; }
+function doUndo() { commitFloating(); if (!undoStack.length) return; redoStack.push(snap()); restore(undoStack.pop()); updHist(); }
+function doRedo() { if (!redoStack.length) return; undoStack.push(snap()); restore(redoStack.pop()); updHist(); }
+
+function loadImage(src) {
+  return new Promise((ok, err) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => err(new Error("Imagem inválida")); im.src = src; });
+}
+async function openFile(file) {
+  const url = URL.createObjectURL(file);
+  try { openImage(await loadImage(url), file.name); } catch (e) { msg(e.message, true); } finally { URL.revokeObjectURL(url); }
+}
+function openImage(im, name) {
+  cancelFloating(); cancelCrop();
+  undoStack.length = redoStack.length = 0; updHist();
+  setSize(im.naturalWidth, im.naturalHeight);
+  bctx.clearRect(0, 0, base.width, base.height); bctx.drawImage(im, 0, 0);
+  docName = (name || "imagem").replace(/\.[^.]+$/, "") + " (editada)";
+  hasDoc = true; $("empty").hidden = true; fit();
+}
+function newDoc() {
+  const r = prompt("Tamanho da nova imagem (largura x altura):", `${base.width}x${base.height}`);
+  if (!r) return;
+  const [w, h] = r.toLowerCase().split(/[x×* ]+/).map(n => parseInt(n, 10));
+  if (!(w > 0 && h > 0 && w <= 16000 && h <= 16000)) return msg("Tamanho inválido.", true);
+  const transparent = confirm("Fundo transparente?\n\nOK = transparente · Cancelar = branco");
+  cancelFloating(); cancelCrop(); undoStack.length = redoStack.length = 0; updHist();
+  setSize(w, h); bctx.clearRect(0, 0, w, h);
+  if (!transparent) { bctx.fillStyle = "#fff"; bctx.fillRect(0, 0, w, h); }
+  docName = "nova imagem"; hasDoc = true; $("empty").hidden = true; fit();
+}
+function msg(t, err) { $("msg").innerHTML = err ? `<span class="error">${t}</span>` : t; if (!err) setTimeout(() => { if ($("msg").innerHTML.includes(t)) $("msg").textContent = ""; }, 6000); }
+
+// ================= Transformações =================
+function transform(w, h, fn) {
+  commitFloating(); pushUndo();
+  const tmp = document.createElement("canvas"); tmp.width = base.width; tmp.height = base.height; tmp.getContext("2d").drawImage(base, 0, 0);
+  setSize(w, h); bctx.save(); bctx.clearRect(0, 0, w, h); fn(bctx, tmp); bctx.restore(); fit();
+}
+$("rotR").onclick = () => transform(base.height, base.width, (c, t) => { c.translate(base.width, 0); c.rotate(Math.PI / 2); c.drawImage(t, 0, 0); });
+$("rotL").onclick = () => transform(base.height, base.width, (c, t) => { c.translate(0, base.height); c.rotate(-Math.PI / 2); c.drawImage(t, 0, 0); });
+$("flipH").onclick = () => transform(base.width, base.height, (c, t) => { c.translate(base.width, 0); c.scale(-1, 1); c.drawImage(t, 0, 0); });
+$("flipV").onclick = () => transform(base.width, base.height, (c, t) => { c.translate(0, base.height); c.scale(1, -1); c.drawImage(t, 0, 0); });
+$("resize").onclick = () => {
+  const r = prompt(`Nova largura em px (atual ${base.width} × ${base.height}). A altura acompanha a proporção.\nOu digite "50%":`, base.width);
+  if (!r) return;
+  const w = r.trim().endsWith("%") ? Math.round(base.width * parseFloat(r) / 100) : parseInt(r, 10);
+  if (!(w > 0 && w <= 16000)) return msg("Largura inválida.", true);
+  const h = Math.max(1, Math.round(base.height * w / base.width));
+  transform(w, h, (c, t) => { c.imageSmoothingQuality = "high"; c.drawImage(t, 0, 0, w, h); });
+};
+
+// ================= Cores =================
+const PALETTE = ["#000000", "#808080", "#800000", "#808000", "#008000", "#008080", "#000080", "#800080", "#808040", "#004040", "#0080ff", "#004080", "#8000ff", "#804000",
+  "#ffffff", "#c0c0c0", "#ff0000", "#ffff00", "#00ff00", "#00ffff", "#0000ff", "#ff00ff", "#ffff80", "#00ff80", "#80ffff", "#8080ff", "#ff0080", "#ff8040"];
+$("palette").innerHTML = PALETTE.map(c => `<span style="background:${c}" data-c="${c}"></span>`).join("");
+$("palette").onclick = e => { const c = e.target.dataset.c; if (c) setColor(c); };
+$("palette").oncontextmenu = e => { e.preventDefault(); const c = e.target.dataset.c; if (c) $("c2").value = c; };
+function setColor(c) { $("c1").value = c; $("hex").textContent = c; tipCache.clear(); }
+$("c1").oninput = () => setColor($("c1").value);
+$("swapC").onclick = () => { const a = $("c1").value; setColor($("c2").value); $("c2").value = a; };
+
+// ================= Ferramentas e opções =================
+const TIPS = { round: "● Redonda", soft: "◌ Suave", square: "■ Quadrada", callig: "✒ Caligrafia", flat: "▬ Marca-texto", spray: "∴ Spray" };
+$("tips").innerHTML = Object.entries(TIPS).map(([k, v]) => `<button data-tip="${k}"><span style="font-size:15px">${v.split(" ")[0]}</span>${v.split(" ").slice(1).join(" ")}</button>`).join("");
+$("tips").onclick = e => { const b = e.target.closest("button"); if (b) { tip = b.dataset.tip; store.set("img-tip", tip); syncUI(); } };
+tip = store.get("img-tip") || "round";
+
+function setTool(t) {
+  if (t === tool) return;
+  if (tool === "insert") commitFloating();
+  if (tool === "crop") cancelCrop();
+  if (t !== "picker") prevTool = t;
+  tool = t; syncUI();
+}
+function syncUI() {
+  document.querySelectorAll("#tools button").forEach(b => b.classList.toggle("on", b.dataset.tool === tool));
+  document.querySelectorAll(".opt").forEach(el => el.hidden = !el.dataset.for.split(" ").includes(tool));
+  document.querySelectorAll("#tips button").forEach(b => b.classList.toggle("on", b.dataset.tip === tip));
+  $("tipLegend").textContent = tool === "blur" ? "Ponta (pincel de borrar)" : "Ponta";
+  for (const [id, f] of [["size", v => v + " px"], ["line", v => v + " px"], ["op", v => v + "%"], ["str", v => v], ["insOp", v => v + "%"]]) $(id + "V").textContent = f($(id).value);
+  over.style.cursor = "";
+  base.style.cursor = { picker: "crosshair", pan: "grab", crop: "crosshair", rect: "crosshair", ellipse: "crosshair", insert: "default" }[tool] || "crosshair";
+}
+document.querySelectorAll("#tools button").forEach(b => b.onclick = () => setTool(b.dataset.tool));
+["size", "line", "op", "str", "insOp"].forEach(id => $(id).addEventListener("input", () => { syncUI(); tipCache.clear(); if (id === "insOp") drawFloating(); }));
+const opacity = () => $("op").value / 100;
+const size = () => +$("size").value;
+
+// ================= Pontas do pincel =================
+const tipCache = new Map();
+function tipCanvas(kind, s, color) {
+  const key = `${kind}|${s}|${color}`;
+  if (tipCache.has(key)) return tipCache.get(key);
+  const c = document.createElement("canvas"), d = Math.max(1, Math.ceil(s)), x = c.getContext("2d");
+  c.width = c.height = d + 2; const m = (d + 2) / 2;
+  x.fillStyle = color;
+  if (kind === "round") { x.beginPath(); x.arc(m, m, s / 2, 0, 7); x.fill(); }
+  else if (kind === "soft") { const g = x.createRadialGradient(m, m, 0, m, m, s / 2); g.addColorStop(0, color); g.addColorStop(0.35, color); g.addColorStop(1, color + "00"); x.fillStyle = g; x.fillRect(0, 0, d + 2, d + 2); }
+  else if (kind === "square") x.fillRect(m - s / 2, m - s / 2, s, s);
+  else if (kind === "callig") { x.translate(m, m); x.rotate(-Math.PI / 4); x.beginPath(); x.ellipse(0, 0, s / 2, Math.max(0.6, s / 9), 0, 0, 7); x.fill(); }
+  else if (kind === "flat") x.fillRect(m - s / 2, m - s / 6, s, s / 3);
+  tipCache.set(key, c);
+  if (tipCache.size > 40) tipCache.delete(tipCache.keys().next().value);
+  return c;
+}
+function stamp(ctx, x, y, kind, s, color) {
+  if (kind === "spray") {
+    ctx.fillStyle = color;
+    for (let i = 0; i < Math.max(4, s * 0.8); i++) { const a = Math.random() * 6.283, r = Math.sqrt(Math.random()) * s / 2; ctx.fillRect(x + Math.cos(a) * r, y + Math.sin(a) * r, 1.2, 1.2); }
+    return;
+  }
+  const t = tipCanvas(kind, s, color); ctx.drawImage(t, x - t.width / 2, y - t.height / 2);
+}
+function line(a, b, step, fn) {
+  const d = Math.hypot(b.x - a.x, b.y - a.y), n = Math.max(1, Math.ceil(d / step));
+  for (let i = 1; i <= n; i++) fn(a.x + (b.x - a.x) * i / n, a.y + (b.y - a.y) * i / n);
+}
+
+// ================= Pincel / borracha (traço com opacidade uniforme) =================
+let stroke = null;
+function strokeStart(p, erase) {
+  pushUndo();
+  const orig = document.createElement("canvas"); orig.width = base.width; orig.height = base.height; orig.getContext("2d").drawImage(base, 0, 0);
+  const sc = document.createElement("canvas"); sc.width = base.width; sc.height = base.height;
+  stroke = { orig, sc, sctx: sc.getContext("2d"), last: p, erase };
+  stamp(stroke.sctx, p.x, p.y, tip, size(), erase ? "#000000" : $("c1").value); renderStroke();
+}
+function strokeMove(p) {
+  const s = size(), step = tip === "spray" ? Math.max(1, s * 0.25) : Math.max(0.5, s * 0.08);
+  line(stroke.last, p, step, (x, y) => stamp(stroke.sctx, x, y, tip, s, stroke.erase ? "#000000" : $("c1").value));
+  stroke.last = p; renderStroke();
+}
+let raf = 0;
+function renderStroke() {
+  if (raf) return;
+  raf = requestAnimationFrame(() => {
+    raf = 0; if (!stroke) return;
+    bctx.save(); bctx.clearRect(0, 0, base.width, base.height); bctx.drawImage(stroke.orig, 0, 0);
+    bctx.globalAlpha = opacity(); bctx.globalCompositeOperation = stroke.erase ? "destination-out" : "source-over";
+    bctx.drawImage(stroke.sc, 0, 0); bctx.restore();
+  });
+}
+function strokeEnd() { cancelAnimationFrame(raf); raf = 0; const s = stroke; renderStrokeNow(s); stroke = null; }
+function renderStrokeNow(s) { bctx.save(); bctx.clearRect(0, 0, base.width, base.height); bctx.drawImage(s.orig, 0, 0); bctx.globalAlpha = opacity(); bctx.globalCompositeOperation = s.erase ? "destination-out" : "source-over"; bctx.drawImage(s.sc, 0, 0); bctx.restore(); }
+
+// ================= Borrar / pixelar =================
+const tmpC = document.createElement("canvas"), tmpX = tmpC.getContext("2d");
+function blurAt(x, y, w, h, circle) {
+  const k = +$("str").value, mode = document.querySelector("input[name=bmode]:checked").value;
+  const pad = mode === "blur" ? k * 2 : 0;
+  const sx = Math.max(0, Math.floor(x - pad)), sy = Math.max(0, Math.floor(y - pad));
+  const sw = Math.min(base.width - sx, Math.ceil(w + 2 * pad)), sh = Math.min(base.height - sy, Math.ceil(h + 2 * pad));
+  if (sw <= 0 || sh <= 0) return;
+  tmpC.width = sw; tmpC.height = sh; tmpX.drawImage(base, sx, sy, sw, sh, 0, 0, sw, sh);
+  bctx.save();
+  bctx.beginPath();
+  if (circle) bctx.arc(x + w / 2, y + h / 2, w / 2, 0, 7); else bctx.rect(x, y, w, h);
+  bctx.clip();
+  if (mode === "blur") { bctx.filter = `blur(${k}px)`; bctx.drawImage(tmpC, sx, sy); }
+  else {
+    // pixelar alinhado a uma grade fixa (blocos não “escorregam” entre pinceladas)
+    const gx = Math.floor(x / k) * k, gy = Math.floor(y / k) * k, gw = Math.ceil((x + w - gx) / k), gh = Math.ceil((y + h - gy) / k);
+    const small = document.createElement("canvas"); small.width = gw; small.height = gh;
+    const sx2 = small.getContext("2d"); sx2.imageSmoothingEnabled = true; sx2.drawImage(base, gx, gy, gw * k, gh * k, 0, 0, gw, gh);
+    bctx.imageSmoothingEnabled = false; bctx.drawImage(small, 0, 0, gw, gh, gx, gy, gw * k, gh * k);
+  }
+  bctx.restore();
+}
+
+// ================= Formas =================
+function shapeRect(a, b, square) {
+  let w = b.x - a.x, h = b.y - a.y;
+  if (square) { const m = Math.max(Math.abs(w), Math.abs(h)); w = Math.sign(w || 1) * m; h = Math.sign(h || 1) * m; }
+  return { x: Math.min(a.x, a.x + w), y: Math.min(a.y, a.y + h), w: Math.abs(w), h: Math.abs(h) };
+}
+function drawShape(ctx, kind, r) {
+  const mode = document.querySelector("input[name=fill]:checked").value, lw = +$("line").value;
+  ctx.save(); ctx.globalAlpha = opacity(); ctx.lineWidth = lw; ctx.strokeStyle = $("c1").value; ctx.fillStyle = $("c2").value; ctx.lineJoin = "miter";
+  ctx.beginPath();
+  // contorno por dentro da área desenhada
+  const i = mode === "fill" ? 0 : lw / 2;
+  if (kind === "rect") ctx.rect(r.x + i, r.y + i, Math.max(0, r.w - 2 * i), Math.max(0, r.h - 2 * i));
+  else ctx.ellipse(r.x + r.w / 2, r.y + r.h / 2, Math.max(0.5, r.w / 2 - i), Math.max(0.5, r.h / 2 - i), 0, 0, Math.PI * 2);
+  if (mode !== "stroke") ctx.fill();
+  if (mode !== "fill") ctx.stroke();
+  ctx.restore();
+}
+
+// ================= Recorte =================
+let crop = null; // {x,y,w,h}
+function drawCrop() {
+  octx.clearRect(0, 0, over.width, over.height);
+  if (!crop) return;
+  octx.fillStyle = "rgba(0,0,0,.5)"; octx.fillRect(0, 0, over.width, over.height); octx.clearRect(crop.x, crop.y, crop.w, crop.h);
+  octx.setLineDash([6 / zoom, 4 / zoom]); octx.lineWidth = 1.5 / zoom; octx.strokeStyle = "#fff"; octx.strokeRect(crop.x, crop.y, crop.w, crop.h);
+  octx.setLineDash([]); octx.strokeStyle = "#000"; octx.lineWidth = 0.5 / zoom; octx.strokeRect(crop.x, crop.y, crop.w, crop.h);
+  $("cropInfo").textContent = `${Math.round(crop.w)} × ${Math.round(crop.h)} px — Enter aplica`;
+  $("cropOk").disabled = crop.w < 2 || crop.h < 2;
+}
+function cropRect(a, b) {
+  const ratio = +$("ratio").value;
+  let w = b.x - a.x, h = b.y - a.y;
+  if (ratio) { if (Math.abs(w) / ratio > Math.abs(h)) h = Math.sign(h || 1) * Math.abs(w) / ratio; else w = Math.sign(w || 1) * Math.abs(h) * ratio; }
+  let r = { x: Math.min(a.x, a.x + w), y: Math.min(a.y, a.y + h), w: Math.abs(w), h: Math.abs(h) };
+  r.x = Math.max(0, r.x); r.y = Math.max(0, r.y); r.w = Math.min(r.w, base.width - r.x); r.h = Math.min(r.h, base.height - r.y);
+  return r;
+}
+function applyCrop() {
+  if (!crop || crop.w < 2 || crop.h < 2) return;
+  pushUndo();
+  const r = { x: Math.round(crop.x), y: Math.round(crop.y), w: Math.round(crop.w), h: Math.round(crop.h) };
+  const d = bctx.getImageData(r.x, r.y, r.w, r.h);
+  setSize(r.w, r.h); bctx.putImageData(d, 0, 0); cancelCrop(); fit();
+}
+function cancelCrop() { crop = null; octx.clearRect(0, 0, over.width, over.height); $("cropOk").disabled = true; $("cropInfo").textContent = "Arraste sobre a imagem."; }
+$("cropOk").onclick = applyCrop; $("cropCancel").onclick = cancelCrop;
+$("ratio").onchange = () => { if (crop) { crop = cropRect({ x: crop.x, y: crop.y }, { x: crop.x + crop.w, y: crop.y + crop.h }); drawCrop(); } };
+
+// ================= Imagem por cima =================
+let floating = null; // {img,x,y,w,h}
+function placeFloating(img) {
+  if (!hasDoc) return openImage(img, "imagem");
+  commitFloating();
+  const k = Math.min(1, base.width * 0.6 / img.naturalWidth, base.height * 0.6 / img.naturalHeight);
+  const w = img.naturalWidth * k, h = img.naturalHeight * k;
+  floating = { img, x: (base.width - w) / 2, y: (base.height - h) / 2, w, h };
+  if (tool !== "insert") { tool = "insert"; syncUI(); }
+  $("insOk").disabled = $("insCancel").disabled = false; drawFloating();
+}
+function handles(f) { return [[f.x, f.y], [f.x + f.w, f.y], [f.x, f.y + f.h], [f.x + f.w, f.y + f.h]]; }
+function drawFloating() {
+  octx.clearRect(0, 0, over.width, over.height);
+  if (!floating) return;
+  const f = floating; octx.save(); octx.globalAlpha = $("insOp").value / 100; octx.drawImage(f.img, f.x, f.y, f.w, f.h); octx.restore();
+  octx.setLineDash([5 / zoom, 3 / zoom]); octx.lineWidth = 1.5 / zoom; octx.strokeStyle = "#000080"; octx.strokeRect(f.x, f.y, f.w, f.h); octx.setLineDash([]);
+  const s = 8 / zoom; octx.fillStyle = "#fff"; octx.strokeStyle = "#000";
+  for (const [x, y] of handles(f)) { octx.fillRect(x - s / 2, y - s / 2, s, s); octx.strokeRect(x - s / 2, y - s / 2, s, s); }
+}
+function commitFloating() {
+  if (!floating) return;
+  pushUndo(); const f = floating;
+  bctx.save(); bctx.globalAlpha = $("insOp").value / 100; bctx.imageSmoothingQuality = "high"; bctx.drawImage(f.img, f.x, f.y, f.w, f.h); bctx.restore();
+  cancelFloating();
+}
+function cancelFloating() { floating = null; octx.clearRect(0, 0, over.width, over.height); $("insOk").disabled = $("insCancel").disabled = true; }
+$("insOk").onclick = commitFloating; $("insCancel").onclick = cancelFloating;
+$("pickInsert").onclick = () => $("file2").click();
+$("file2").onchange = async e => { const f = e.target.files[0]; e.target.value = ""; if (!f) return; const u = URL.createObjectURL(f); placeFloating(await loadImage(u)); };
+
+// ================= Conta-gotas =================
+function pick(p) {
+  const n = +$("sample").value, h = Math.floor(n / 2);
+  const x = Math.max(0, Math.min(base.width - n, Math.floor(p.x) - h)), y = Math.max(0, Math.min(base.height - n, Math.floor(p.y) - h));
+  const d = bctx.getImageData(x, y, n, n).data; let r = 0, g = 0, b = 0, a = 0;
+  for (let i = 0; i < d.length; i += 4) { r += d[i] * d[i + 3]; g += d[i + 1] * d[i + 3]; b += d[i + 2] * d[i + 3]; a += d[i + 3]; }
+  if (!a) return msg("Pixel transparente — nenhuma cor.", true);
+  const hex = "#" + [r, g, b].map(v => Math.round(v / a).toString(16).padStart(2, "0")).join("");
+  setColor(hex); msg(`Cor ${hex} copiada.`);
+}
+
+// ================= Ponteiro =================
+const pos = e => { const r = base.getBoundingClientRect(); return { x: (e.clientX - r.left) / zoom, y: (e.clientY - r.top) / zoom }; };
+let drag = null, spaceDown = false;
+base.addEventListener("pointerdown", e => {
+  if (!hasDoc || e.button === 1) return;
+  base.setPointerCapture(e.pointerId);
+  const p = pos(e);
+  if (tool === "pan" || spaceDown) { drag = { kind: "pan", sx: e.clientX, sy: e.clientY, l: stage.scrollLeft, t: stage.scrollTop }; return; }
+  if (tool === "picker" || (e.altKey && (tool === "brush" || tool === "rect" || tool === "ellipse"))) {
+    pick(p); if (tool === "picker" && $("pickBack").checked) setTool(prevTool); return;
+  }
+  if (tool === "brush" || tool === "eraser") { strokeStart(p, tool === "eraser"); drag = { kind: "stroke" }; return; }
+  if (tool === "blur") {
+    const shape = document.querySelector("input[name=bshape]:checked").value;
+    if (shape === "rect") { drag = { kind: "blurRect", a: p }; return; }
+    pushUndo(); const s = size(); blurAt(p.x - s / 2, p.y - s / 2, s, s, true); drag = { kind: "blur", last: p }; return;
+  }
+  if (tool === "rect" || tool === "ellipse") { drag = { kind: "shape", a: p }; return; }
+  if (tool === "crop") {
+    if (crop && p.x > crop.x && p.x < crop.x + crop.w && p.y > crop.y && p.y < crop.y + crop.h) drag = { kind: "cropMove", dx: p.x - crop.x, dy: p.y - crop.y };
+    else drag = { kind: "crop", a: p };
+    return;
+  }
+  if (tool === "insert" && floating) {
+    const tol = 10 / zoom, h = handles(floating).findIndex(([x, y]) => Math.abs(p.x - x) < tol && Math.abs(p.y - y) < tol);
+    if (h >= 0) drag = { kind: "resize", h, start: { ...floating } };
+    else if (p.x > floating.x && p.x < floating.x + floating.w && p.y > floating.y && p.y < floating.y + floating.h) drag = { kind: "move", dx: p.x - floating.x, dy: p.y - floating.y };
+  }
+});
+base.addEventListener("pointermove", e => {
+  const p = pos(e);
+  if (hasDoc) $("stPos").textContent = `${Math.floor(p.x)}, ${Math.floor(p.y)}`;
+  if (tool === "insert" && floating && !drag) {
+    const tol = 10 / zoom, h = handles(floating).findIndex(([x, y]) => Math.abs(p.x - x) < tol && Math.abs(p.y - y) < tol);
+    base.style.cursor = h >= 0 ? (h === 0 || h === 3 ? "nwse-resize" : "nesw-resize") : (p.x > floating.x && p.x < floating.x + floating.w && p.y > floating.y && p.y < floating.y + floating.h ? "move" : "default");
+  }
+  if (!drag) return;
+  if (drag.kind === "pan") { stage.scrollLeft = drag.l - (e.clientX - drag.sx); stage.scrollTop = drag.t - (e.clientY - drag.sy); }
+  else if (drag.kind === "stroke") strokeMove(p);
+  else if (drag.kind === "blur") { const s = size(); line(drag.last, p, Math.max(1, s * 0.25), (x, y) => blurAt(x - s / 2, y - s / 2, s, s, true)); drag.last = p; }
+  else if (drag.kind === "blurRect" || drag.kind === "shape") {
+    const r = shapeRect(drag.a, p, e.shiftKey); octx.clearRect(0, 0, over.width, over.height);
+    if (drag.kind === "shape") drawShape(octx, tool, r);
+    else { octx.setLineDash([5 / zoom, 3 / zoom]); octx.lineWidth = 1.5 / zoom; octx.strokeStyle = "#000080"; octx.strokeRect(r.x, r.y, r.w, r.h); octx.setLineDash([]); }
+    drag.r = r;
+  }
+  else if (drag.kind === "crop") { crop = cropRect(drag.a, p); drawCrop(); }
+  else if (drag.kind === "cropMove") { crop.x = Math.max(0, Math.min(base.width - crop.w, p.x - drag.dx)); crop.y = Math.max(0, Math.min(base.height - crop.h, p.y - drag.dy)); drawCrop(); }
+  else if (drag.kind === "move") { floating.x = p.x - drag.dx; floating.y = p.y - drag.dy; drawFloating(); }
+  else if (drag.kind === "resize") {
+    const s = drag.start, ax = drag.h % 2 ? s.x : s.x + s.w, ay = drag.h < 2 ? s.y + s.h : s.y; // canto oposto fixo
+    let w = Math.max(4, Math.abs(p.x - ax)), h = Math.max(4, Math.abs(p.y - ay));
+    if ($("keepRatio").checked !== e.shiftKey) { const k = Math.max(w / s.w, h / s.h); w = s.w * k; h = s.h * k; }
+    floating.w = w; floating.h = h; floating.x = p.x < ax ? ax - w : ax; floating.y = p.y < ay ? ay - h : ay; drawFloating();
+  }
+});
+base.addEventListener("pointerup", () => {
+  if (!drag) return;
+  if (drag.kind === "stroke") strokeEnd();
+  else if (drag.kind === "shape" && drag.r && drag.r.w > 1 && drag.r.h > 1) { pushUndo(); drawShape(bctx, tool, drag.r); octx.clearRect(0, 0, over.width, over.height); }
+  else if (drag.kind === "blurRect" && drag.r && drag.r.w > 1 && drag.r.h > 1) { pushUndo(); blurAt(drag.r.x, drag.r.y, drag.r.w, drag.r.h, false); octx.clearRect(0, 0, over.width, over.height); }
+  else if (drag.kind === "shape" || drag.kind === "blurRect") octx.clearRect(0, 0, over.width, over.height);
+  drag = null;
+});
+stage.addEventListener("wheel", e => {
+  if (!e.ctrlKey || !hasDoc) return;
+  e.preventDefault(); const r = stage.getBoundingClientRect();
+  setZoom(zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15), e.clientX - r.left, e.clientY - r.top);
+  if (crop) drawCrop(); if (floating) drawFloating();
+}, { passive: false });
+
+// ================= Abrir / arrastar / colar / salvar =================
+$("open").onclick = () => $("file").click();
+$("file").onchange = e => { const f = e.target.files[0]; e.target.value = ""; if (f) openFile(f); };
+$("new").onclick = newDoc;
+stage.addEventListener("dragover", e => e.preventDefault());
+stage.addEventListener("drop", async e => {
+  e.preventDefault(); const f = [...e.dataTransfer.files].find(f => f.type.startsWith("image/")); if (!f) return;
+  if (hasDoc) { const u = URL.createObjectURL(f); placeFloating(await loadImage(u)); } else openFile(f);
+});
+addEventListener("paste", async e => {
+  const it = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith("image/")); if (!it) return;
+  const u = URL.createObjectURL(it.getAsFile()); const img = await loadImage(u);
+  if (hasDoc) placeFloating(img); else openImage(img, "colada");
+});
+function exportBlob() {
+  commitFloating();
+  const fmt = $("fmt").value, type = { png: "image/png", jpg: "image/jpeg", webp: "image/webp" }[fmt];
+  let src = base;
+  if (fmt === "jpg") { src = document.createElement("canvas"); src.width = base.width; src.height = base.height; const x = src.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, src.width, src.height); x.drawImage(base, 0, 0); }
+  return new Promise(ok => src.toBlob(ok, type, 0.92));
+}
+$("save").onclick = async () => {
+  if (!hasDoc) return;
+  const blob = await exportBlob();
+  try {
+    const r = await fetch(`/api/save-image?name=${encodeURIComponent(docName)}`, { method: "POST", headers: { "Content-Type": blob.type }, body: blob });
+    const j = await r.json(); if (!r.ok) throw new Error(j.error);
+    $("msg").innerHTML = `✔ Salvo: <a href="/api/files?f=${encodeURIComponent(j.file)}" download>${j.file}</a> <button class="link" id="showF">mostrar na pasta</button>`;
+    $("showF").onclick = () => fetch("/api/open-folder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ f: j.file }) });
+  } catch (e) { msg("Falha ao salvar: " + e.message, true); }
+};
+$("download").onclick = async () => {
+  if (!hasDoc) return;
+  const blob = await exportBlob(), a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = `${docName}.${$("fmt").value}`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+};
+$("undo").onclick = doUndo; $("redo").onclick = doRedo;
+$("zIn").onclick = () => { setZoom(zoom * 1.25); if (crop) drawCrop(); if (floating) drawFloating(); };
+$("zOut").onclick = () => { setZoom(zoom / 1.25); if (crop) drawCrop(); if (floating) drawFloating(); };
+$("zFit").onclick = () => { fit(); if (crop) drawCrop(); if (floating) drawFloating(); };
+$("z100").onclick = () => { setZoom(1); if (crop) drawCrop(); if (floating) drawFloating(); };
+
+// ================= Teclado =================
+addEventListener("keydown", e => {
+  if (e.target.matches("input[type=text], input[type=number], select")) return;
+  const k = e.key.toLowerCase();
+  if (e.ctrlKey && k === "z") { e.preventDefault(); e.shiftKey ? doRedo() : doUndo(); return; }
+  if (e.ctrlKey && k === "y") { e.preventDefault(); doRedo(); return; }
+  if (e.ctrlKey && k === "s") { e.preventDefault(); $("save").click(); return; }
+  if (e.ctrlKey && k === "o") { e.preventDefault(); $("open").click(); return; }
+  if (e.ctrlKey) return;
+  if (e.key === " ") { spaceDown = true; base.style.cursor = "grab"; e.preventDefault(); return; }
+  if (e.key === "Enter") { if (tool === "crop") applyCrop(); if (tool === "insert") commitFloating(); return; }
+  if (e.key === "Escape") { if (tool === "crop") cancelCrop(); if (tool === "insert") cancelFloating(); return; }
+  if (e.key === "[") { $("size").value = Math.max(1, size() - Math.max(1, Math.round(size() * 0.15))); syncUI(); return; }
+  if (e.key === "]") { $("size").value = Math.min(300, size() + Math.max(1, Math.round(size() * 0.15))); syncUI(); return; }
+  if (e.key === "+" || e.key === "=") return $("zIn").click();
+  if (e.key === "-") return $("zOut").click();
+  if (e.key === "0") return $("zFit").click();
+  if (e.key === "1") return $("z100").click();
+  if (k === "x") return $("swapC").click();
+  const map = { b: "brush", e: "eraser", i: "picker", u: "blur", r: "rect", o: "ellipse", c: "crop", v: "insert", h: "pan" };
+  if (map[k]) setTool(map[k]);
+});
+addEventListener("keyup", e => { if (e.key === " ") { spaceDown = false; syncUI(); } });
+addEventListener("resize", () => { if (hasDoc && zoom < 1) fit(); });
+
+// ================= Início =================
+syncUI(); setSize(800, 600);
+// Aberto a partir de outra ferramenta (ex.: quadro do editor de vídeo)
+try {
+  const f = sessionStorage.getItem("editor-open");
+  if (f) { sessionStorage.removeItem("editor-open"); openImage(await loadImage(`/api/files?f=${encodeURIComponent(f)}&view=1`), f); }
+} catch {}
+</script>
+</body></html>

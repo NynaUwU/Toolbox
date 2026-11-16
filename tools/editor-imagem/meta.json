@@ -1,0 +1,7 @@
+{
+  "title": "Editor de imagens",
+  "description": "Recorte, pincel com pontas e opacidade, borracha, conta-gotas, borrar/pixelar, retângulos e círculos, imagem por cima, girar e redimensionar.",
+  "icon": "🎨",
+  "category": "Edição de mídia",
+  "order": 1
+}

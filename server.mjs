@@ -4,7 +4,7 @@ import multer from "multer";
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFile } from "node:child_process";
-import { ROOT, OUTPUT, TMP, DATA, IS_WIN, findTool, insideDir } from "./lib/paths.mjs";
+import { ROOT, OUTPUT, TMP, DATA, IS_WIN, findTool, insideDir, safeName, uniquePath } from "./lib/paths.mjs";
 import { createJob, getJob, listJobs, finishJob, hasRunning } from "./lib/jobs.mjs";
 import { GROUPS, groupFor, convert } from "./lib/convert.mjs";
 import { download, FORMATS } from "./lib/youtube.mjs";
@@ -14,6 +14,7 @@ import { installLibreOfficePortable } from "./lib/installer.mjs";
 import * as sys from "./lib/system.mjs";
 import * as net from "./lib/network.mjs";
 import * as sensors from "./lib/sensors.mjs";
+import * as video from "./lib/video.mjs";
 
 const PORT = Number(process.env.TOOLBOX_PORT) || 3098;
 const HOST = "127.0.0.1";
@@ -150,6 +151,50 @@ app.post("/api/convert", upload.single("file"), (req, res) => {
     .then(out => { job.files.push(path.relative(OUTPUT, out)); finishJob(job); }, err => finishJob(job, err))
     .finally(() => fs.rm(req.file.path, () => {}));
   res.json({ id: job.id });
+});
+
+// ---------- Editor de vídeo ----------
+app.post("/api/video/upload", upload.single("file"), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado." });
+  const name = Buffer.from(req.file.originalname, "latin1").toString("utf8");
+  try {
+    const rec = await video.register(req.file.path, name);
+    let previewJob = null;
+    if (rec.needsPreview) {
+      const job = createJob("preview", `Prévia de ${name}`);
+      video.makePreview(job, rec).then(() => finishJob(job), err => finishJob(job, err));
+      previewJob = job.id;
+    }
+    const { file, preview, ...info } = rec;
+    res.json({ ...info, previewJob });
+  } catch (e) {
+    fs.rm(req.file.path, () => {});
+    res.status(400).json({ error: e.message });
+  }
+});
+app.get("/api/video/:id/media", (req, res) => {
+  const rec = video.get(req.params.id);
+  if (!rec) return res.status(404).send("Vídeo não encontrado (o servidor reiniciou? abra de novo).");
+  res.sendFile(rec.preview || rec.file);
+});
+app.post("/api/video/:id/export", (req, res) => {
+  const rec = video.get(req.params.id);
+  if (!rec) return res.status(404).json({ error: "Vídeo não encontrado — abra o arquivo de novo." });
+  const job = createJob("video", `${rec.name} → .${req.body?.format || "mp4"}`);
+  video.exportVideo(job, rec, req.body || {})
+    .then(out => { job.files.push(path.relative(OUTPUT, out)); finishJob(job); }, err => finishJob(job, err));
+  res.json({ id: job.id });
+});
+setInterval(video.cleanup, 3600e3);
+
+// ---------- Salvar imagem (editor de imagens / quadro de vídeo) ----------
+app.post("/api/save-image", express.raw({ type: "image/*", limit: "300mb" }), (req, res) => {
+  const ext = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" }[req.get("content-type")];
+  if (!ext || !req.body?.length) return res.status(400).json({ error: "Imagem inválida." });
+  const base = safeName(String(req.query.name || "imagem").replace(/\.[a-z0-9]+$/i, ""));
+  const out = uniquePath(OUTPUT, base, ext);
+  fs.writeFileSync(out, req.body);
+  res.json({ file: path.relative(OUTPUT, out) });
 });
 
 // ---------- Arquivos de saída ----------
