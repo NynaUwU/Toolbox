@@ -182,11 +182,18 @@ function choosePlaylist(info, preselectId) {
 
 // ---------- Fila de downloads ----------
 const queue = []; let running = 0;
+const active = new Set(); // links na fila ou baixando (mesmo formato) — não entram de novo
+const keyOf = body => `${body.url.replace(/[&?]list=[^&]*/, "")}|${body.format}`;
 function updQueue() {
   $("queueInfo").textContent = queue.length || running ? `${running} baixando · ${queue.length} na fila` : "";
   $("cancelQ").hidden = !queue.length;
 }
-function enqueue(item) { queue.push(item); updQueue(); pump(); }
+function enqueue(item) {
+  const k = keyOf(item.body);
+  if (active.has(k)) { skipped++; return; }
+  active.add(k); queue.push(item); updQueue(); pump();
+}
+let skipped = 0;
 function pump() {
   while (running < +$("parallel").value && queue.length) {
     const it = queue.shift(); running++; updQueue();
@@ -198,11 +205,12 @@ function pump() {
         const f = document.createElement("fieldset"); f.className = "job";
         f.innerHTML = `<legend>${esc(it.label)}</legend><span class="error">✖ ${esc(e.message)}</span>`; $("jobs").prepend(f);
       }
+      active.delete(keyOf(it.body));
       running--; updQueue(); pump();
     })();
   }
 }
-$("cancelQ").onclick = () => { queue.length = 0; updQueue(); };
+$("cancelQ").onclick = () => { for (const it of queue) active.delete(keyOf(it.body)); queue.length = 0; updQueue(); };
 
 $("form").onsubmit = async e => {
   e.preventDefault();
@@ -229,7 +237,9 @@ $("form").onsubmit = async e => {
       add(ent.url, { body: { url: ent.url, ...opts, folder: pick.folder, index: pick.folder ? ent.index : 0 }, label: `${tag} · ${ent.index}. ${ent.title}` });
     }
   }
-  $("urls").value = ""; countLinks(); $("go").disabled = false; $("msg").textContent = "";
+  $("urls").value = ""; countLinks(); $("go").disabled = false;
+  $("msg").textContent = skipped ? `${skipped} link(s) ignorado(s): já estavam na fila ou baixando.` : "";
+  skipped = 0;
 };
 </script>
 </body></html>

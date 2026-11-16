@@ -30,11 +30,12 @@ table.interactive td, table.interactive th { padding: 2px 6px; }
   border: 2px dashed #808080; background: #fff; padding: 18px; text-align: center; cursor: pointer;
 }
 .dropzone.over { background: #000080; color: #fff; border-color: #fff; }
-.progress-indicator { width: 100%; }
+.progress-indicator { width: 100%; overflow: hidden; position: relative; }
+/* Barra “indeterminada”: um bloco que corre DENTRO da caixa (vai e volta, sem sair dela) */
 .progress-indicator.indeterminate .progress-indicator-bar {
-  width: 30% !important; animation: marquee 1.2s linear infinite;
+  width: 30% !important; animation: marquee 1.4s ease-in-out infinite alternate;
 }
-@keyframes marquee { from { margin-left: -30%; } to { margin-left: 100%; } }
+@keyframes marquee { from { margin-left: 0; } to { margin-left: 70%; } }
 .job { margin-bottom: 8px; }
 .job .stage { margin: 4px 0; overflow-wrap: anywhere; }
 .job .files a { display: inline-block; margin-right: 8px; }
