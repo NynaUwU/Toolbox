@@ -34,9 +34,10 @@ node scripts/setup.mjs --auto
 set OPEN=--open
 :loop
 node server.mjs %OPEN%
+set CODE=%errorlevel%
 set OPEN=
 rem Codigo 42 = atualizacao aplicada, reinicia
-if %errorlevel%==42 (
+if "%CODE%"=="42" (
   call npm install --omit=dev --no-audit --no-fund --loglevel=error
   goto loop
 )
