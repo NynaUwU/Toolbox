@@ -33,6 +33,14 @@
     </div>
   </fieldset>
 
+  <fieldset id="lo-box" hidden>
+    <legend>Conversão de documentos</legend>
+    <p>Para Word/PDF/planilhas é preciso o Microsoft Office (não encontrado neste PC) <b>ou</b> o LibreOffice portátil.</p>
+    <p class="muted">O LibreOffice portátil é baixado (~350 MB) e extraído para <code>runtime\libreoffice</code>, dentro da pasta da Toolbox. Nada é instalado no Windows; para remover, basta apagar a pasta.</p>
+    <button id="lo-get">⬇ Baixar LibreOffice portátil</button>
+    <div id="lo-job" style="margin-top:8px"></div>
+  </fieldset>
+
   <div class="row">
     <button class="default" id="go" disabled>▶ Converter</button>
     <button id="clear" disabled>Limpar</button>
@@ -43,7 +51,7 @@
 </div>
 
 <script type="module">
-import { api, trackJob, openOutput } from "/assets/jobs98.js";
+import { api, post, trackJob, openOutput } from "/assets/jobs98.js";
 const $ = id => document.getElementById(id);
 const AUDIO = ["mp3", "wav", "m4a", "ogg", "flac", "opus", "aac"];
 const LABEL = { mp3: "MP3", wav: "WAV", m4a: "M4A", ogg: "OGG", flac: "FLAC", opus: "OPUS", aac: "AAC",
@@ -55,6 +63,16 @@ const DEFAULT = { video: "mp3", audio: "mp3", gif: "mp4", image: "png", document
 
 const groups = await api("/api/convert/formats");
 let queue = [];
+const DOC_GROUPS = ["document", "pdf", "sheet", "slides"];
+let docsOk = true;
+api("/api/status").then(s => { docsOk = s.tools.documentos.ok; updateOptions(); }).catch(() => {});
+$("lo-get").onclick = async () => {
+  $("lo-get").disabled = true;
+  const { id } = await post("/api/tools/libreoffice");
+  const job = await trackJob($("lo-job"), id, "LibreOffice portátil");
+  if (job.status === "done") { docsOk = true; updateOptions(); }
+  else $("lo-get").disabled = false;
+};
 
 $("accepted").textContent = "Aceita: " + Object.values(groups).map(g => g.label).join(", ");
 const groupOf = name => {
@@ -93,7 +111,8 @@ function render() {
 function updateOptions() {
   const sel = queue.filter(q => q.group);
   const show = { audio: false, video: false, gif: false, scale: false };
-  const docs = sel.some(q => ["document", "pdf", "sheet", "slides"].includes(q.group));
+  const docs = sel.some(q => DOC_GROUPS.includes(q.group));
+  $("lo-box").hidden = docsOk || !docs;
   for (const q of sel) {
     if (AUDIO.includes(q.target)) show.audio = true;
     if (["mp4", "webm", "mkv", "mov"].includes(q.target) && q.group !== "audio") { show.video = true; show.scale = true; }
@@ -104,7 +123,7 @@ function updateOptions() {
   $("opts").hidden = !Object.values(show).some(Boolean);
   $("note").textContent = sel.some(q => q.group === "pdf")
     ? "Obs.: PDF → Word funciona melhor com PDFs de texto; layouts complexos podem sair diferentes."
-    : docs ? "Documentos são convertidos com o LibreOffice." : "";
+    : "";
 }
 
 function add(files) {

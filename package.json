@@ -15,5 +15,9 @@
     "98.css": "^0.1.21",
     "express": "^4.22.3",
     "multer": "^2.5.0"
+  },
+  "toolbox": {
+    "repo": "NynaUwU/Toolbox",
+    "branch": "claude/zen-keller-ibizxy"
   }
 }

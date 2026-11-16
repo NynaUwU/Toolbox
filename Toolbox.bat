@@ -1,46 +1,40 @@
 @echo off
+setlocal
 chcp 65001 >nul
-title Toolbox
 cd /d "%~dp0"
 
+rem Uma atualizacao pode ter trazido um Toolbox.bat novo: troca e reinicia por ele
+if exist "Toolbox.bat.new" ( move /y "Toolbox.bat.new" "Toolbox.bat" >nul & "%~dp0Toolbox.bat" %* & exit /b )
+
+title Toolbox
 echo.
 echo   ==============================
-echo             T O O L B O X
+echo            T O O L B O X
 echo   ==============================
+echo   Tudo fica dentro desta pasta - nada e instalado no Windows.
 echo.
 
-where node >nul 2>nul
-if errorlevel 1 (
-  echo   Node.js nao encontrado. Instalando via winget...
-  winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
+set "NODE=%~dp0runtime\node\node.exe"
+if not exist "%NODE%" (
+  echo   Baixando Node.js portatil - so na primeira vez...
+  powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\get-node.ps1"
+)
+if not exist "%NODE%" (
   echo.
-  echo   Feche esta janela e abra o Toolbox.bat novamente.
+  echo   Nao foi possivel baixar o Node.js. Verifique a internet e tente de novo.
   pause
-  exit /b
+  exit /b 1
 )
 
-where git >nul 2>nul
-if errorlevel 1 (
-  echo   Git nao encontrado: atualizacoes automaticas desativadas.
-  echo   Para ativar:  winget install -e --id Git.Git
-) else (
-  echo   Procurando atualizacoes no GitHub...
-  git pull --ff-only --quiet
-)
+"%NODE%" scripts\setup.mjs
 
-call npm install --omit=dev --no-audit --no-fund --loglevel=error
-node scripts/setup.mjs --auto
+set "OPEN=--open"
+if "%~1"=="--restart" set "OPEN="
+"%NODE%" server.mjs %OPEN%
 
-set OPEN=--open
-:loop
-node server.mjs %OPEN%
-set CODE=%errorlevel%
-set OPEN=
-rem Codigo 42 = atualizacao aplicada, reinicia
-if "%CODE%"=="42" (
-  call npm install --omit=dev --no-audit --no-fund --loglevel=error
-  goto loop
-)
+rem Codigo 42 = atualizacao aplicada: reabre pelo .bat (que pode ter sido atualizado)
+if "%errorlevel%"=="42" ( "%~f0" --restart )
+
 echo.
 echo   Servidor encerrado.
 pause

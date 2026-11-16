@@ -83,7 +83,7 @@ async function pollStatus() {
     const s = await getJSON("/api/status");
     const t = s.tools;
     const miss = Object.entries(t).filter(([, v]) => !v.ok).map(([k]) => k);
-    $("#st-tools").textContent = miss.length ? `⚠ faltando: ${miss.join(", ")}` : "✔ yt-dlp · ffmpeg · LibreOffice";
+    $("#st-tools").textContent = miss.length ? `⚠ faltando: ${miss.join(", ")}` : `✔ yt-dlp · ffmpeg · ${t.documentos.version}`;
     $("#st-tools").title = Object.entries(t).map(([k, v]) => `${k}: ${v.version || "não instalado"}`).join("\n");
     $("#st-version").textContent = `versão ${s.update.version || "—"}`;
     $("#st-jobs").textContent = s.busy ? "⏳ tarefa em andamento" : "nenhuma tarefa";

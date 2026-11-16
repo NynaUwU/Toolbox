@@ -1,7 +1,8 @@
-node_modules/
+runtime/
 bin/
 tmp/
 data/
 output/
-catalog.json
+Toolbox.bat.new
 .DS_Store
+node_modules/.bin/

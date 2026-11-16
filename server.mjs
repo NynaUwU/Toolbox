@@ -9,6 +9,8 @@ import { createJob, getJob, listJobs, finishJob, hasRunning } from "./lib/jobs.m
 import { GROUPS, groupFor, convert } from "./lib/convert.mjs";
 import { download, FORMATS } from "./lib/youtube.mjs";
 import * as updater from "./lib/updater.mjs";
+import { detectOffice } from "./lib/office.mjs";
+import { installLibreOfficePortable } from "./lib/installer.mjs";
 
 const PORT = Number(process.env.TOOLBOX_PORT) || 3098;
 const HOST = "127.0.0.1";
@@ -76,11 +78,17 @@ let toolsCache = null;
 async function toolStatus(force) {
   if (toolsCache && !force) return toolsCache;
   const [ytdlp, ffmpeg, soffice] = [findTool("yt-dlp"), findTool("ffmpeg"), findTool("soffice")];
-  const [v1, v2] = await Promise.all([versionOf(ytdlp, ["--version"]), versionOf(ffmpeg, ["-version"])]);
+  const [v1, v2, office] = await Promise.all([versionOf(ytdlp, ["--version"]), versionOf(ffmpeg, ["-version"]), detectOffice()]);
+  const officeApps = Object.keys(office).filter(k => office[k]);
   toolsCache = {
     "yt-dlp": { ok: Boolean(v1), version: v1 },
     ffmpeg: { ok: Boolean(v2), version: v2?.replace(/^ffmpeg version /, "").split(" ")[0] },
-    libreoffice: { ok: Boolean(soffice), version: soffice ? "instalado" : null },
+    // documentos: Office já existente OU LibreOffice portátil
+    documentos: {
+      ok: Boolean(soffice || officeApps.length),
+      version: [officeApps.length && `Office (${officeApps.join(", ")})`, soffice && "LibreOffice"].filter(Boolean).join(" + ") || null,
+      office, libreoffice: Boolean(soffice),
+    },
   };
   return toolsCache;
 }
@@ -116,7 +124,8 @@ app.post("/api/youtube", (req, res) => {
 const upload = multer({
   storage: multer.diskStorage({
     destination: TMP,
-    filename: (req, file, cb) => cb(null, `up-${Date.now()}-${Math.random().toString(36).slice(2)}`),
+    // mantém a extensão: Office/LibreOffice identificam o formato por ela
+    filename: (req, file, cb) => cb(null, `up-${Date.now()}-${Math.random().toString(36).slice(2)}${path.extname(file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, "")}`),
   }),
   limits: { fileSize: 8 * 1024 ** 3 },
 });
@@ -206,6 +215,18 @@ app.post("/api/tools/update", (req, res) => {
   });
 });
 
+// LibreOffice portátil: baixado e extraído para runtime/ só quando o usuário pede
+app.post("/api/tools/libreoffice", (req, res) => {
+  const running = listJobs().find(j => j.type === "libreoffice" && j.status === "running");
+  if (running) return res.json({ id: running.id });
+  const job = createJob("libreoffice", "LibreOffice portátil");
+  installLibreOfficePortable({
+    log: msg => { job.stage = msg; job.log.push(msg); },
+    onProgress: pct => { job.progress = pct; },
+  }).then(() => { toolsCache = null; finishJob(job); }, err => finishJob(job, err));
+  res.json({ id: job.id });
+});
+
 // Verificação periódica: atualiza sozinho quando não há tarefas rodando
 async function autoUpdate() {
   await updater.checkUpdates();
@@ -216,7 +237,7 @@ async function autoUpdate() {
         process.exit(RESTART_CODE);
       }
     } catch (e) {
-      updater.state.error = "Falha ao aplicar atualização automática (há alterações locais?).";
+      updater.state.error = `Falha ao aplicar atualização: ${e.message}`;
     }
   }
 }
@@ -234,7 +255,7 @@ app.listen(PORT, HOST, () => {
     spawn(cmd, args, { detached: true, stdio: "ignore" }).on("error", () => {}).unref();
   }
   if (updater.state.available) {
-    setTimeout(autoUpdate, 15000);
+    setTimeout(autoUpdate, 5000);
     setInterval(autoUpdate, AUTO_UPDATE_MIN * 60 * 1000);
   }
 });

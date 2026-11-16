@@ -7,7 +7,7 @@ Central pessoal de ferramentas que roda **só no seu computador** (http://localh
 | Ferramenta | O que faz | Usa |
 |---|---|---|
 | 📼 YouTube Downloader | Vídeo/playlist → MP3, M4A, WAV, MP4, WEBM | yt-dlp + ffmpeg |
-| 🔁 Conversor de arquivos | Word ↔ PDF, vídeo ↔ áudio, GIF ↔ vídeo, PNG/JPG/WEBP/BMP/TIFF/ICO, planilhas, apresentações | ffmpeg + LibreOffice |
+| 🔁 Conversor de arquivos | Word ↔ PDF, vídeo ↔ áudio, GIF ↔ vídeo, PNG/JPG/WEBP/BMP/TIFF/ICO, planilhas, apresentações | ffmpeg + Office ou LibreOffice portátil |
 | 📏 Conversor de unidades | Peso, comprimento, temperatura, volume, área, velocidade, pressão, energia, potência, tempo, dados, ângulo, torque | — |
 | 💱 Conversor de moedas | 160+ moedas, guarda a última cotação para uso offline | open.er-api.com / Frankfurter |
 | 🔌 Bitolas de fio | AWG ↔ mm² ↔ diâmetro, corrente (NBR 5410), queda de tensão | — |
@@ -15,30 +15,29 @@ Central pessoal de ferramentas que roda **só no seu computador** (http://localh
 
 Arquivos baixados/convertidos vão para **`Downloads\Toolbox`** (mude com a variável `TOOLBOX_OUTPUT`).
 
-## Instalação (Windows, uma vez)
+## Instalação (Windows) — sem instalar nada
 
-1. Instale o Git (se ainda não tiver):
-   ```
-   winget install -e --id Git.Git
-   ```
-2. Clone o repositório onde preferir:
-   ```
-   git clone https://github.com/NynaUwU/Toolbox.git
-   ```
-3. Dê dois cliques em **`Toolbox.bat`**. Na primeira vez ele:
-   - instala o Node.js (via winget) se faltar — depois é só abrir o `.bat` de novo;
-   - baixa o **yt-dlp** e o **ffmpeg** para a pasta `bin\`;
-   - pergunta se quer instalar o **LibreOffice** (necessário só para Word/PDF).
+1. No GitHub: **Code → Download ZIP** e extraia onde quiser (ex.: `Documentos\Toolbox`).
+2. Dê dois cliques em **`Toolbox.bat`**. Na primeira vez ele baixa, **para dentro da própria pasta**:
+   - **Node.js portátil** → `runtime\node` (~30 MB)
+   - **yt-dlp** e **ffmpeg** → `bin\` (~150 MB)
+
+Nada vai para o Windows: sem instalador, sem winget, sem admin, sem registro. Para desinstalar, apague a pasta.
+
+**Documentos (Word/PDF/planilhas):**
+- Se o PC já tem **Microsoft Office**, ele é usado automaticamente.
+- Senão, o Conversor oferece **“Baixar LibreOffice portátil”**: o `.msi` oficial é só *extraído* (com o lessmsi, também portátil) para `runtime\libreoffice`, sem executar instalador.
 
 Para abrir sem a janela preta na frente, use **`Toolbox (minimizado).vbs`**.
 Para iniciar junto com o Windows: `Win + R` → `shell:startup` → cole ali um atalho do `.vbs`.
 
-## Atualizações automáticas
+## Atualizações automáticas (sem git)
 
-- **Ao abrir:** o `Toolbox.bat` faz `git pull` e instala dependências novas.
-- **Com ela aberta:** a cada 30 min o servidor verifica o GitHub; se houver novidade e nenhuma tarefa rodando, baixa e reinicia sozinho (a página recarrega).
-- **Manual:** clique na versão na barra de status, ou no botão 🔄 que aparece no topo.
-- **yt-dlp:** é atualizado 1x por dia (o YouTube muda com frequência). Também há o botão *Atualizar yt-dlp* na ferramenta.
+- Ao iniciar e a cada 30 min, a Toolbox consulta o GitHub. Se houver commit novo e nenhuma tarefa rodando, baixa o zip, substitui os arquivos e reinicia (a página recarrega sozinha).
+- Nunca toca em `runtime\`, `bin\` e `data\`.
+- Manual: clique na versão na barra de status, ou no botão 🔄 do topo.
+- O yt-dlp se atualiza 1x por dia.
+- Repositório configurado em `package.json` → `"toolbox": { "repo", "branch" }`.
 
 ## Adicionar coisas
 
@@ -55,11 +54,12 @@ Aparecem sozinhos no menu — sem build. Use `"hidden": true` para ocultar.
 ## Estrutura
 
 ```
-Toolbox.bat            launcher (atualiza, instala, reinicia)
+Toolbox.bat            launcher (baixa Node portátil, inicia, reinicia após atualizar)
 server.mjs             servidor local (Express, só 127.0.0.1)
-lib/                   yt-dlp, conversões, tarefas, atualizador
-scripts/setup.mjs      baixa/atualiza yt-dlp, ffmpeg, LibreOffice
+lib/                   yt-dlp, conversões, Office, instalador portátil, atualizador
+scripts/               get-node.ps1 (Node portátil), setup.mjs (yt-dlp, ffmpeg)
 public/                interface principal
 tools/  sites/         conteúdo (cada pasta = um item)
-bin/ data/ tmp/        gerados localmente (fora do git)
+node_modules/          dependências já incluídas (dispensa npm)
+runtime/ bin/ data/    baixados/gerados localmente (fora do git)
 ```
