@@ -22,22 +22,9 @@ async function getJSON(url, opts) {
 const post = url => getJSON(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
 
 // ---------- Navegação ----------
-// external = site de fora (nova aba) · window = abre em janela separada · demais = painel principal
+// external = site de fora · window = abre numa nova aba · demais = painel principal
 const href = i => esc(i.external || i.window ? i.url : "#" + i.url);
-const attrs = i => i.external ? 'target="_blank" rel="noopener"' : i.window ? `data-win="${esc(i.slug)}"` : "";
-function openWindow(i) {
-  const w = Math.min(i.width || 1100, screen.availWidth - 40), h = Math.min(i.height || 800, screen.availHeight - 60);
-  const left = Math.max(0, (screen.availWidth - w) / 2), top = Math.max(0, (screen.availHeight - h) / 2);
-  const win = window.open(i.url, `toolbox-${i.slug}`, `popup=yes,width=${w},height=${h},left=${left},top=${top}`);
-  if (win) win.focus(); else location.href = i.url; // bloqueador de pop-up: abre na própria aba
-}
-document.addEventListener("click", e => {
-  const a = e.target.closest("a[data-win]");
-  if (!a) return;
-  e.preventDefault();
-  const item = items.find(i => i.slug === a.dataset.win);
-  if (item) openWindow(item);
-});
+const attrs = i => i.external || i.window ? 'target="_blank" rel="noopener"' : "";
 function renderNav() {
   const q = $("#search").value.trim().toLowerCase();
   const match = i => !q || `${i.title} ${i.description}`.toLowerCase().includes(q);
@@ -46,7 +33,7 @@ function renderNav() {
     return `<h3>${CATEGORY_ICON[label] || "📁"} ${esc(label)}</h3>` + list.map(i =>
       `<a href="${href(i)}" ${attrs(i)}
           class="${current === i.url ? "active" : ""}" title="${esc(i.description)}">
-        <span class="ico">${esc(i.icon)}</span>${esc(i.title)}${i.external ? " ↗" : i.window ? " ⧉" : ""}</a>`).join("");
+        <span class="ico">${esc(i.icon)}</span>${esc(i.title)}${i.external || i.window ? " ↗" : ""}</a>`).join("");
   }).join("") || '<p class="empty">Nada encontrado.</p>';
 }
 
@@ -55,7 +42,7 @@ function renderHome() {
   $("#main-body").innerHTML = `<div class="home">` + categories(items).map(([label, list]) => {
     return `<h2>${CATEGORY_ICON[label] || "📁"} ${esc(label)}</h2><div class="tiles">` + list.map(i =>
       `<a class="tile" href="${href(i)}" ${attrs(i)}>
-        <span class="ico">${esc(i.icon)}</span><b>${esc(i.title)}${i.external ? " ↗" : i.window ? " ⧉" : ""}</b>
+        <span class="ico">${esc(i.icon)}</span><b>${esc(i.title)}${i.external || i.window ? " ↗" : ""}</b>
         <span class="desc">${esc(i.description)}</span></a>`).join("") + `</div>`;
   }).join("") + `</div>`;
 }
@@ -123,15 +110,30 @@ route();
 pollStatus();
 setInterval(pollStatus, 15000);
 
-// Clique na versão = verificar atualizações agora
-$("#st-version").style.cursor = "pointer";
-$("#st-version").title = "Clique para procurar atualizações";
-$("#st-version").onclick = async () => {
-  $("#st-version").textContent = "procurando atualizações…";
+// Procurar atualizações agora (botão do topo ou clique na versão)
+async function checkNow() {
+  const b = $("#btn-check");
+  b.disabled = true; b.textContent = "⏳ Procurando…";
   try {
     const u = await post("/api/update/check");
-    if (u.error) alert(u.error);
-    else if (!u.behind) alert("A Toolbox já está atualizada.");
-  } catch {}
+    if (u.error) alert(`Não foi possível verificar: ${u.error}`);
+    else if (!u.behind) alert(`A Toolbox já está na versão mais recente (${u.version || "—"}).`);
+    else {
+      const list = (u.pending || []).slice(0, 10).map(m => `• ${m}`).join("\n");
+      if (confirm(`${u.behind} atualização(ões) disponível(is):\n\n${list}\n\nInstalar agora? A Toolbox reinicia sozinha.`)) {
+        b.textContent = "⏳ Atualizando…";
+        await post("/api/update/apply");
+        b.textContent = "⏳ Reiniciando…";
+        return; // a página recarrega quando o servidor voltar
+      }
+    }
+  } catch {
+    alert("Falha ao consultar o servidor.");
+  }
+  b.disabled = false; b.textContent = "🔍 Procurar atualizações";
   pollStatus();
-};
+}
+$("#btn-check").onclick = checkNow;
+$("#st-version").style.cursor = "pointer";
+$("#st-version").title = "Clique para procurar atualizações";
+$("#st-version").onclick = checkNow;

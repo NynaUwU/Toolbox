@@ -11,7 +11,8 @@ Central pessoal de ferramentas que roda **só no seu computador** (http://localh
 | 📏 Conversor de unidades | Peso, comprimento, temperatura, volume, área, velocidade, pressão, energia, potência, tempo, dados, ângulo, torque | — |
 | 💱 Conversor de moedas | 160+ moedas, guarda a última cotação para uso offline | open.er-api.com / Frankfurter |
 | 🔌 Bitolas de fio | AWG ↔ mm² ↔ diâmetro, corrente (NBR 5410), queda de tensão | — |
-| 📘 Guia visual de eletrônica e elétrica | 46 páginas interativas, 72 projetos, 37 calculadoras — abre em janela separada | — |
+| 📘 Guia visual de eletrônica e elétrica | 46 páginas interativas, 72 projetos, 37 calculadoras — abre em nova aba | — |
+| 🔌 Pinagem de conectores | 42 conectores com desenho clicável e cores de fio: USB (A/C/micro/mini), HDMI, DP, VGA, DVI, RJ45/RJ11, áudio, ATX/EPS/PCIe/SATA/Molex, GPIO, ISP, SWD, OBD-II e antigos (serial, paralela, PS/2, AT, MIDI, SCART, IDE, disquete, game port, fonte AT…) | — |
 | 🔬 Simulador de circuitos | CircuitJS (Falstad, online) + calculadoras offline **com o esquema do circuito desenhado ao vivo**: Ohm, divisor, LED, código de cores, série/paralelo, RC/RL, LC, 555, bobinas | — |
 | 📊 Gerenciador de tarefas | CPU (por núcleo), memória, rede, discos, **temperaturas**, processos (finalizar), informações do PC | PowerShell / netstat; LibreHardwareMonitor portátil (opcional) |
 | 📡 Dispositivos na rede | IP, nome, fabricante e MAC dos aparelhos — faixa pela máscara (até /16 = 255.255.0.0) | sondagem TCP + tabela ARP do Windows |
@@ -41,7 +42,7 @@ Para iniciar junto com o Windows: `Win + R` → `shell:startup` → cole ali um 
 
 - Ao iniciar e a cada 30 min, a Toolbox consulta o GitHub. Se houver commit novo e nenhuma tarefa rodando, baixa o zip, substitui os arquivos e reinicia (a página recarrega sozinha).
 - Nunca toca em `runtime\`, `bin\` e `data\`.
-- Manual: clique na versão na barra de status, ou no botão 🔄 do topo.
+- Manual: botão **🔍 Procurar atualizações** no topo (ou clique na versão na barra de status).
 - O yt-dlp se atualiza 1x por dia.
 - Repositório configurado em `package.json` → `"toolbox": { "repo", "branch" }`.
 
@@ -55,7 +56,7 @@ Para iniciar junto com o Windows: `Win + R` → `shell:startup` → cole ali um 
 { "title": "Nome", "description": "O que faz", "icon": "⚡", "category": "Eletrônica", "order": 10 }
 ```
 
-Aparecem sozinhos no menu, agrupados pela `category` (Eletrônica, Mídia e arquivos, Conversores, Sistema e rede, Utilitários… ou uma nova) — sem build. Use `"hidden": true` para ocultar e `"window": true` para abrir em janela separada (com `"width"`/`"height"`).
+Aparecem sozinhos no menu, agrupados pela `category` (Eletrônica, Mídia e arquivos, Conversores, Sistema e rede, Utilitários… ou uma nova) — sem build. Use `"hidden": true` para ocultar e `"window": true` para abrir em uma nova aba.
 
 ## Estrutura
 
