@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Toolbox</title>
+<meta name="description" content="Minhas ferramentas, sites e projetos em um só lugar.">
+<style>
+  :root {
+    --bg: #f6f7fb; --surface: #ffffff; --text: #1b1e28; --muted: #5d6475;
+    --border: #e2e5ee; --accent: #5b5bd6; --accent-soft: #ececfe;
+    --radius: 14px; color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f1117; --surface: #181b24; --text: #e8eaf1; --muted: #9aa1b3;
+      --border: #2a2f3d; --accent: #8b8bff; --accent-soft: #23243d; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f1117; --surface: #181b24; --text: #e8eaf1; --muted: #9aa1b3;
+    --border: #2a2f3d; --accent: #8b8bff; --accent-soft: #23243d; color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header, main { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+  header { padding-top: 40px; padding-bottom: 8px; display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+  h1 { margin: 0; font-size: 32px; letter-spacing: -0.02em; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  #theme { background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    border-radius: 999px; padding: 8px 12px; cursor: pointer; font: inherit; flex: none; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 20px; }
+  #search { flex: 1 1 260px; padding: 12px 14px; font: inherit; color: var(--text);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+    border-radius: 999px; padding: 8px 14px; cursor: pointer; font: inherit; font-size: 14px; }
+  .chip[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; padding-bottom: 64px; }
+  .card { display: flex; flex-direction: column; gap: 8px; text-decoration: none; color: inherit;
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 18px; transition: border-color .15s, transform .15s; min-width: 0; }
+  .card:hover, .card:focus-visible { border-color: var(--accent); transform: translateY(-2px); outline: none; }
+  .card .top { display: flex; align-items: center; gap: 10px; }
+  .icon { font-size: 26px; line-height: 1; }
+  .card h2 { font-size: 17px; margin: 0; overflow-wrap: anywhere; }
+  .card p { margin: 0; color: var(--muted); font-size: 14px; flex: 1; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
+  .tag { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 1px 7px; }
+  .kind { font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; }
+  .new { background: var(--accent); color: var(--surface); border-radius: 6px; padding: 1px 7px; font-weight: 600; }
+  .empty { color: var(--muted); padding: 40px 0; text-align: center; grid-column: 1 / -1; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>🧰 Toolbox</h1>
+    <p>Ferramentas, sites e projetos em um só lugar.</p>
+  </div>
+  <button id="theme" aria-label="Alternar tema">🌓 Tema</button>
+</header>
+<main>
+  <div class="controls">
+    <input id="search" type="search" placeholder="Buscar por nome, descrição ou tag…" aria-label="Buscar">
+    <div class="chips" role="group" aria-label="Filtrar por tipo">
+      <button class="chip" data-kind="all" aria-pressed="true">Tudo</button>
+      <button class="chip" data-kind="tool" aria-pressed="false">Ferramentas</button>
+      <button class="chip" data-kind="site" aria-pressed="false">Sites</button>
+      <button class="chip" data-kind="link" aria-pressed="false">Links</button>
+    </div>
+  </div>
+  <div id="grid" class="grid" aria-live="polite"><p class="empty">Carregando…</p></div>
+</main>
+<script>
+  const LABEL = { tool: "Ferramenta", site: "Site", link: "Link" };
+  const NEW_DAYS = 14;
+  let items = [], kind = "all", query = "";
+
+  const store = {
+    get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+  };
+  const root = document.documentElement;
+  const savedTheme = store.get("theme");
+  if (savedTheme) root.dataset.theme = savedTheme;
+  document.getElementById("theme").onclick = () => {
+    const dark = root.dataset.theme
+      ? root.dataset.theme === "dark"
+      : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    store.set("theme", root.dataset.theme);
+  };
+
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const fmtDate = iso => new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
+
+  function render() {
+    const q = query.trim().toLowerCase();
+    const list = items
+      .filter(i => kind === "all" || i.kind === kind)
+      .filter(i => !q || [i.title, i.description, ...(i.tags || [])].join(" ").toLowerCase().includes(q));
+    const grid = document.getElementById("grid");
+    if (!list.length) { grid.innerHTML = '<p class="empty">Nada encontrado.</p>'; return; }
+    grid.innerHTML = list.map(i => {
+      const isNew = i.updated && (Date.now() - new Date(i.updated)) / 864e5 < NEW_DAYS;
+      const ext = i.external ? ' target="_blank" rel="noopener"' : "";
+      return `<a class="card" href="${esc(i.url)}"${ext}>
+        <div class="top"><span class="icon">${esc(i.icon)}</span><h2>${esc(i.title)}${i.external ? " ↗" : ""}</h2></div>
+        <p>${esc(i.description)}</p>
+        <div class="meta">
+          <span class="kind">${LABEL[i.kind] || i.kind}</span>
+          ${isNew ? '<span class="new">Atualizado</span>' : ""}
+          ${(i.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("")}
+          ${i.updated ? `<span>· ${fmtDate(i.updated)}</span>` : ""}
+        </div>
+      </a>`;
+    }).join("");
+  }
+
+  document.getElementById("search").addEventListener("input", e => { query = e.target.value; render(); });
+  document.querySelectorAll(".chip").forEach(b => b.addEventListener("click", () => {
+    kind = b.dataset.kind;
+    document.querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", x === b));
+    render();
+  }));
+
+  fetch("catalog.json", { cache: "no-store" })
+    .then(r => r.json())
+    .then(data => {
+      items = data.items.sort((a, b) => (b.updated || "").localeCompare(a.updated || ""));
+      render();
+    })
+    .catch(() => {
+      document.getElementById("grid").innerHTML =
+        '<p class="empty">Não foi possível carregar o catálogo. Rode <code>node scripts/build-catalog.mjs</code>.</p>';
+    });
+</script>
+</body>
+</html>

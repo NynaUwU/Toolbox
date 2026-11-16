@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../assets/tool.css">
+<title>Formatador de JSON</title></head><body><main>
+<a class="back" href="../../">← Toolbox</a>
+<h1>🧾 Formatador de JSON</h1><p class="lead">Cole um JSON para validar, formatar ou minificar.</p>
+<div class="card">
+  <textarea id="txt" spellcheck="false" placeholder='{"exemplo": [1, 2, 3]}'></textarea>
+  <div class="row" style="margin-top:12px">
+    <button id="fmt">Formatar</button><button id="min" class="ghost">Minificar</button>
+    <select id="ind" style="flex:0 0 130px"><option value="2">2 espaços</option><option value="4">4 espaços</option><option value="tab">Tab</option></select>
+  </div>
+  <p class="status" id="st"></p>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+function run(pretty) {
+  try {
+    const v = JSON.parse($("txt").value);
+    const ind = $("ind").value === "tab" ? "\t" : +$("ind").value;
+    $("txt").value = pretty ? JSON.stringify(v, null, ind) : JSON.stringify(v);
+    $("st").className = "status"; $("st").textContent = "✔ JSON válido";
+  } catch (e) { $("st").className = "status error"; $("st").textContent = "✖ " + e.message; }
+}
+$("fmt").onclick = () => run(true);
+$("min").onclick = () => run(false);
+</script></main></body></html>

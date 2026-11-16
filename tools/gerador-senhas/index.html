@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../assets/tool.css">
+<title>Gerador de senhas</title></head><body><main>
+<a class="back" href="../../">← Toolbox</a>
+<h1>🔐 Gerador de senhas</h1><p class="lead">Tudo é gerado no seu navegador; nada é enviado.</p>
+<div class="card">
+  <label for="len">Tamanho: <b id="lenv">20</b></label>
+  <input id="len" type="range" min="8" max="64" value="20" style="width:100%">
+  <div class="row" style="margin-top:12px">
+    <label><input type="checkbox" id="lower" checked> a-z</label>
+    <label><input type="checkbox" id="upper" checked> A-Z</label>
+    <label><input type="checkbox" id="digits" checked> 0-9</label>
+    <label><input type="checkbox" id="symbols" checked> !@#…</label>
+  </div>
+</div>
+<div class="card">
+  <input id="out" type="text" class="mono" readonly>
+  <div class="row" style="margin-top:12px"><button id="gen">Gerar</button><button id="copy" class="ghost">Copiar</button></div>
+  <p class="status" id="st"></p>
+</div>
+<script>
+const sets = { lower: "abcdefghijklmnopqrstuvwxyz", upper: "ABCDEFGHIJKLMNOPQRSTUVWXYZ", digits: "0123456789", symbols: "!@#$%^&*()-_=+[]{};:,.?/" };
+const $ = id => document.getElementById(id);
+function rand(n) { const a = new Uint32Array(1); const lim = Math.floor(2**32 / n) * n; do crypto.getRandomValues(a); while (a[0] >= lim); return a[0] % n; }
+function gen() {
+  const active = Object.keys(sets).filter(k => $(k).checked);
+  if (!active.length) { $("st").textContent = "Selecione ao menos um conjunto."; return; }
+  const len = +$("len").value, pool = active.map(k => sets[k]).join("");
+  const chars = active.map(k => sets[k][rand(sets[k].length)]); // garante 1 de cada
+  while (chars.length < len) chars.push(pool[rand(pool.length)]);
+  for (let i = chars.length - 1; i > 0; i--) { const j = rand(i + 1); [chars[i], chars[j]] = [chars[j], chars[i]]; }
+  $("out").value = chars.join(""); $("st").textContent = "";
+}
+$("len").oninput = e => { $("lenv").textContent = e.target.value; gen(); };
+document.querySelectorAll("input[type=checkbox]").forEach(c => c.onchange = gen);
+$("gen").onclick = gen;
+$("copy").onclick = async () => { try { await navigator.clipboard.writeText($("out").value); $("st").textContent = "Copiado!"; } catch { $("out").select(); } };
+gen();
+</script></main></body></html>

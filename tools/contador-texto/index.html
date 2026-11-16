@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="../../assets/tool.css">
+<title>Contador de texto</title></head><body><main>
+<a class="back" href="../../">← Toolbox</a>
+<h1>🔢 Contador de texto</h1><p class="lead">Estatísticas atualizadas enquanto você digita.</p>
+<div class="card"><textarea id="txt" placeholder="Digite ou cole seu texto…"></textarea></div>
+<div class="card row mono" id="stats"></div>
+<script>
+const t = document.getElementById("txt"), s = document.getElementById("stats");
+function upd() {
+  const v = t.value, words = (v.match(/\S+/g) || []).length;
+  const data = { "Caracteres": [...v].length, "Sem espaços": [...v.replace(/\s/g, "")].length, "Palavras": words,
+    "Linhas": v ? v.split("\n").length : 0, "Leitura": Math.max(0, Math.ceil(words / 200)) + " min" };
+  s.innerHTML = Object.entries(data).map(([k, n]) => '<div><div class="status">' + k + '</div><b style="font-size:22px">' + n + '</b></div>').join("");
+}
+t.oninput = upd; upd();
+</script></main></body></html>
