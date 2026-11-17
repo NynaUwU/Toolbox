@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gerenciador de tarefas</title>
-<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/table98.js" defer></script>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/remote.js"></script><script src="/assets/table98.js" defer></script>
 <style>
   body { display: flex; flex-direction: column; }
   .panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
@@ -56,7 +56,7 @@
 
 <section id="temperaturas" hidden>
   <p class="muted" id="t-src"></p>
-  <fieldset id="lhm-box" hidden>
+  <fieldset class="local-only" id="lhm-box" hidden>
     <legend>Sensores completos (CPU, placa-mãe, SSD, ventoinhas)</legend>
     <p>O Windows só libera esses sensores para programas com permissão de administrador. A Toolbox pode usar o <b>LibreHardwareMonitor portátil</b> (código aberto, ~5 MB, fica em <code>runtime\librehardwaremonitor</code>; nada é instalado).</p>
     <p class="muted">Ao abrir, o Windows pede confirmação de administrador. Ele fica minimizado perto do relógio; feche-o por lá quando quiser.</p>
@@ -75,7 +75,7 @@
   <div class="row" style="margin-bottom:6px">
     <input id="filter" type="text" placeholder="Filtrar processos…" class="grow">
     <span id="proc-count" class="muted"></span>
-    <button id="kill" disabled>Finalizar tarefa</button>
+    <button class="local-only" id="kill" disabled>Finalizar tarefa</button>
   </div>
   <div class="sunken-panel" style="height:calc(100vh - 110px);overflow:auto">
     <table class="interactive" id="proc-table" style="width:100%">

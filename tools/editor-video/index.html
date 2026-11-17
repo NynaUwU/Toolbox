@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Editor de vídeo</title>
-<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/table98.js" defer></script>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/remote.js"></script><script src="/assets/table98.js" defer></script>
 <style>
   html, body { height: 100%; }
   body { display: flex; flex-direction: column; gap: 6px; padding: 6px; overflow: hidden; }
@@ -92,7 +92,7 @@
         <div class="field-row"><label for="gw" style="width:70px">Largura</label><input id="gw" type="number" value="480" min="64" max="1280" step="10" style="width:60px"> px</div>
       </div>
       <p class="muted" id="outInfo"></p>
-      <div class="row"><button id="export" class="default" disabled>▶ Exportar</button><button id="folder">📂 Pasta</button></div>
+      <div class="row"><button id="export" class="default" disabled>▶ Exportar</button><button class="local-only" id="folder">📂 Pasta</button></div>
     </fieldset>
     <div id="jobs"></div>
   </div>

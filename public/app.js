@@ -137,3 +137,25 @@ $("#btn-check").onclick = checkNow;
 $("#st-version").style.cursor = "pointer";
 $("#st-version").title = "Clique para procurar atualizações";
 $("#st-version").onclick = checkNow;
+
+// ---------- Acesso pela rede (só no PC da Toolbox) ----------
+async function openLan() {
+  const s = await getJSON("/api/settings/lan");
+  const real = s.urls.filter(u => !u.virtual);
+  $("#lanUrls").innerHTML = (real.length ? real : s.urls).map(u => `<li><a href="${esc(u.url)}" target="_blank" rel="noopener">${esc(u.url)}</a> <span class="muted">(${esc(u.name)})</span></li>`).join("")
+    || "<li>Nenhuma rede encontrada.</li>";
+  $("#lanOn").checked = s.lanAccess;
+  $("#lanPwState").textContent = s.hasPassword ? "🔒 Há uma senha definida. Digite outra para trocar." : "🔓 Sem senha: qualquer aparelho da rede pode usar.";
+  $("#lanPw").value = ""; $("#lanMsg").textContent = "";
+  $("#lanBack").hidden = false;
+}
+async function saveLan(extra = {}) {
+  const body = { lanAccess: $("#lanOn").checked, ...extra };
+  if (!extra.clearPassword && $("#lanPw").value) body.password = $("#lanPw").value;
+  await getJSON("/api/settings/lan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  $("#lanMsg").textContent = "✔ Salvo"; setTimeout(openLan, 600);
+}
+$("#btn-lan").onclick = openLan;
+$("#lanSave").onclick = () => saveLan();
+$("#lanPwClear").onclick = () => { if (confirm("Remover a senha? Qualquer aparelho da rede poderá usar a Toolbox.")) saveLan({ clearPassword: true }); };
+$("#lanClose").onclick = () => { $("#lanBack").hidden = true; };

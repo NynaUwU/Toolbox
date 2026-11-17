@@ -16,23 +16,36 @@ import * as net from "./lib/network.mjs";
 import * as sensors from "./lib/sensors.mjs";
 import * as video from "./lib/video.mjs";
 import * as wintools from "./lib/wintools.mjs";
+import * as access from "./lib/access.mjs";
 
 const PORT = Number(process.env.TOOLBOX_PORT) || 3098;
-const HOST = "127.0.0.1";
+const HOST = "0.0.0.0"; // aceita conexões da rede local (ver lib/access.mjs)
 const RESTART_CODE = 42; // o Toolbox.bat reinicia o servidor quando recebe este código
 const AUTO_UPDATE_MIN = 30;
 
 const app = express();
 app.use(express.json());
 
-// Bloqueia requisições vindas de outros sites (proteção contra CSRF em localhost)
+// Bloqueia requisições disparadas por OUTROS sites (CSRF): a origem precisa ser a própria Toolbox
 app.use("/api", (req, res, next) => {
   const origin = req.get("origin");
-  if (req.method !== "GET" && origin && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
-    return res.status(403).json({ error: "Origem não permitida" });
+  if (req.method !== "GET" && origin) {
+    let host = ""; try { host = new URL(origin).host; } catch {}
+    if (host !== req.get("host")) return res.status(403).json({ error: "Origem não permitida" });
   }
   next();
 });
+
+// Acesso pela rede: o próprio PC entra direto; outros PCs precisam do acesso ligado (e da senha, se houver)
+app.use(access.guard);
+app.post("/api/login", (req, res) => {
+  if (!access.checkPassword(req.body?.password)) return res.status(401).json({ error: "Senha incorreta." });
+  res.setHeader("Set-Cookie", access.sessionCookie());
+  res.json({ ok: true });
+});
+app.get("/api/whoami", (req, res) => res.json({ local: access.isLocal(req), urls: access.lanUrls(PORT), ...access.settings() }));
+app.get("/api/settings/lan", access.localOnly, (req, res) => res.json({ ...access.settings(), urls: access.lanUrls(PORT) }));
+app.post("/api/settings/lan", access.localOnly, (req, res) => res.json(access.save(req.body || {})));
 
 // ---------- Arquivos estáticos ----------
 app.use("/vendor/98", express.static(path.join(ROOT, "node_modules", "98.css", "dist")));
@@ -159,10 +172,10 @@ app.post("/api/convert", upload.single("file"), (req, res) => {
 });
 
 // ---------- Ferramentas do Windows (só comandos para copiar e arquivos para baixar) ----------
-app.get("/api/windows/info", (req, res) => res.json({ rawBase: wintools.RAW_BASE }));
 // irm <url> | iex  — versão servida pela própria Toolbox (só funciona no PC onde ela roda)
 app.get("/win/update.ps1", (req, res) => {
-  res.type("text/plain; charset=utf-8").send(wintools.bootstrap(`http://localhost:${PORT}/tools/windows/scripts`));
+  // usa o endereço pelo qual o PC chegou aqui (ex.: http://192.168.0.10:3098) — tudo pela rede local
+  res.type("text/plain; charset=utf-8").send(wintools.bootstrap(`http://${req.get("host")}/tools/windows/scripts`));
 });
 
 // ---------- Editor de vídeo ----------
@@ -236,7 +249,7 @@ function openInExplorer(target, select) {
   spawn(cmd, args, { detached: true, stdio: "ignore" }).on("error", () => {}).unref();
 }
 
-app.post("/api/open-folder", (req, res) => {
+app.post("/api/open-folder", access.localOnly, (req, res) => {
   const f = req.body?.f;
   const full = f ? insideDir(OUTPUT, f) : null;
   if (full && fs.existsSync(full)) openInExplorer(full, true);          // destaca o arquivo
@@ -274,7 +287,7 @@ app.get("/api/currency", async (req, res) => {
 
 // ---------- Atualizações ----------
 app.post("/api/update/check", async (req, res) => res.json(await updater.checkUpdates()));
-app.post("/api/update/apply", async (req, res) => {
+app.post("/api/update/apply", access.localOnly, async (req, res) => {
   try {
     const changed = await updater.applyUpdate();
     res.json({ ok: true, restarting: changed });
@@ -283,7 +296,7 @@ app.post("/api/update/apply", async (req, res) => {
     res.status(500).json({ error: String(e.stderr || e.message).slice(0, 400) });
   }
 });
-app.post("/api/tools/update", (req, res) => {
+app.post("/api/tools/update", access.localOnly, (req, res) => {
   const ytdlp = findTool("yt-dlp");
   if (!ytdlp) return res.status(400).json({ error: "yt-dlp não instalado." });
   execFile(ytdlp, ["-U"], { timeout: 120000, windowsHide: true }, (err, out, errOut) => {
@@ -296,13 +309,13 @@ app.post("/api/tools/update", (req, res) => {
 app.get("/api/system/info", async (req, res) => res.json(await sys.systemInfo()));
 app.get("/api/system/perf", async (req, res) => res.json(await sys.performance()));
 app.get("/api/system/processes", async (req, res) => res.json(await sys.processes()));
-app.post("/api/system/kill", (req, res) => {
+app.post("/api/system/kill", access.localOnly, (req, res) => {
   try { sys.killProcess(req.body?.pid); res.json({ ok: true }); }
   catch (e) { res.status(400).json({ error: e.code === "EPERM" ? "Sem permissão para finalizar este processo." : e.message }); }
 });
 
 app.get("/api/system/sensors", async (req, res) => res.json(await sensors.sensors()));
-app.post("/api/system/sensors/lhm", (req, res) => {
+app.post("/api/system/sensors/lhm", access.localOnly, (req, res) => {
   if (req.body?.action === "start") {
     try { sensors.startLhm(); return res.json({ ok: true }); }
     catch (e) { return res.status(400).json({ error: e.message }); }
@@ -329,7 +342,7 @@ app.post("/api/network/scan", (req, res) => {
 });
 
 // LibreOffice portátil: baixado e extraído para runtime/ só quando o usuário pede
-app.post("/api/tools/libreoffice", (req, res) => {
+app.post("/api/tools/libreoffice", access.localOnly, (req, res) => {
   const running = listJobs().find(j => j.type === "libreoffice" && j.status === "running");
   if (running) return res.json({ id: running.id });
   const job = createJob("libreoffice", "LibreOffice portátil");
@@ -362,7 +375,10 @@ await updater.currentVersion();
 
 app.listen(PORT, HOST, () => {
   const url = `http://localhost:${PORT}`;
-  console.log(`\n  Toolbox rodando em ${url}\n  Arquivos salvos em: ${OUTPUT}\n  (feche esta janela para encerrar)\n`);
+  const lan = access.lanUrls(PORT).filter(u => !u.virtual).map(u => `    ${u.url}`).join("\n");
+  console.log(`\n  Toolbox rodando em ${url}`);
+  if (lan) console.log(`  Na rede (outros PCs): \n${lan}${access.settings().hasPassword ? "\n  (protegido por senha)" : ""}`);
+  console.log(`  Arquivos salvos em: ${OUTPUT}\n  (feche esta janela para encerrar)\n`);
   if (process.argv.includes("--open")) {
     const [cmd, args] = IS_WIN ? ["cmd", ["/c", "start", "", url]] : [process.platform === "darwin" ? "open" : "xdg-open", [url]];
     spawn(cmd, args, { detached: true, stdio: "ignore" }).on("error", () => {}).unref();

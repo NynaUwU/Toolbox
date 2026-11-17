@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Conversor de arquivos</title>
-<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/table98.js" defer></script>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/remote.js"></script><script src="/assets/table98.js" defer></script>
 </head><body>
 <div class="stack">
   <label class="dropzone" id="drop" for="file">
@@ -33,7 +33,7 @@
     </div>
   </fieldset>
 
-  <fieldset id="lo-box" hidden>
+  <fieldset class="local-only" id="lo-box" hidden>
     <legend>Conversão de documentos</legend>
     <p>Para Word/PDF/planilhas é preciso o Microsoft Office (não encontrado neste PC) <b>ou</b> o LibreOffice portátil.</p>
     <p class="muted">O LibreOffice portátil é baixado (~350 MB) e extraído para <code>runtime\libreoffice</code>, dentro da pasta da Toolbox. Nada é instalado no Windows; para remover, basta apagar a pasta.</p>
@@ -44,7 +44,7 @@
   <div class="row">
     <button class="default" id="go" disabled>▶ Converter</button>
     <button id="clear" disabled>Limpar</button>
-    <button id="folder">📂 Abrir pasta</button>
+    <button class="local-only" id="folder">📂 Abrir pasta</button>
   </div>
   <p class="muted" id="note"></p>
   <div id="jobs"></div>

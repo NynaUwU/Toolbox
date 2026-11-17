@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>YouTube Downloader</title>
-<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/table98.js" defer></script>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/remote.js"></script><script src="/assets/table98.js" defer></script>
 <style>
   #urls { width: 100%; min-height: 96px; resize: vertical; font-family: "Courier New", monospace; font-size: 12px; white-space: pre; }
   #queueInfo { margin-left: auto; }
@@ -57,9 +57,9 @@
 
   <div class="row">
     <button type="submit" class="default" id="go">⬇ Baixar</button>
-    <button type="button" id="folder">📂 Abrir pasta</button>
+    <button type="button" class="local-only" id="folder">📂 Abrir pasta</button>
     <span class="grow"></span>
-    <button type="button" id="upd" title="O YouTube muda com frequência; atualize se algum download falhar">Atualizar yt-dlp</button>
+    <button type="button" class="local-only" id="upd" title="O YouTube muda com frequência; atualize se algum download falhar">Atualizar yt-dlp</button>
   </div>
   <p id="msg"></p>
 </form>

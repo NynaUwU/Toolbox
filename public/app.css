@@ -71,3 +71,12 @@ body.full .layout { padding: 0; }
   .sidebar { width: auto; max-height: 40vh; }
 }
 [hidden] { display: none !important; }
+.remote .local-only { display: none !important; }
+
+/* Janela "Acesso pela rede" */
+#lanBack { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 12px; }
+#lanBack[hidden] { display: none; }
+#lanWin { width: min(460px, 100%); }
+#lanWin .window-body { display: flex; flex-direction: column; gap: 8px; }
+#lanUrls { margin: 0 0 0 18px; padding: 0; font-family: "Courier New", monospace; font-size: 13px; }
+#lanUrls a { color: #000080; }

@@ -6,15 +6,16 @@
 <title>Toolbox</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧰</text></svg>">
 <link rel="stylesheet" href="/vendor/98/98.css">
-<link rel="stylesheet" href="/app.css">
+<link rel="stylesheet" href="/app.css"><script src="/assets/remote.js"></script>
 </head>
 <body>
   <header class="topbar">
     <a href="#/" class="brand">🧰 <b>Toolbox</b></a>
     <div class="spacer"></div>
-    <button id="btn-update" hidden>🔄 Atualização disponível</button>
-    <button id="btn-check" title="Consultar o GitHub agora">🔍 Procurar atualizações</button>
-    <button id="btn-folder" title="Abrir a pasta onde os arquivos são salvos">📂 Pasta de saída</button>
+    <button class="local-only" id="btn-update" hidden>🔄 Atualização disponível</button>
+    <button class="local-only" id="btn-check" title="Consultar o GitHub agora">🔍 Procurar atualizações</button>
+    <button class="local-only" id="btn-lan" title="Acesso de outros PCs da rede">🌐 Rede</button>
+    <button class="local-only" id="btn-folder" title="Abrir a pasta onde os arquivos são salvos">📂 Pasta de saída</button>
   </header>
 
   <div class="layout">
@@ -36,6 +37,24 @@
       </div>
       <div class="window-body" id="main-body"></div>
     </section>
+  </div>
+
+  <div id="lanBack" hidden>
+    <div class="window" id="lanWin" role="dialog" aria-modal="true" aria-labelledby="lanTitle">
+      <div class="title-bar"><div class="title-bar-text" id="lanTitle">🌐 Acesso pela rede</div>
+        <div class="title-bar-controls"><button aria-label="Close" id="lanClose"></button></div></div>
+      <div class="window-body">
+        <p>Outros PCs, celulares e tablets da mesma rede abrem a Toolbox por:</p>
+        <ul id="lanUrls"></ul>
+        <div class="field-row"><input type="checkbox" id="lanOn"><label for="lanOn">Permitir acesso de outros aparelhos da rede</label></div>
+        <fieldset><legend>Senha (só para quem acessa pela rede)</legend>
+          <p id="lanPwState"></p>
+          <div class="field-row"><input type="password" id="lanPw" placeholder="nova senha" autocomplete="new-password" style="flex:1"><button id="lanPwClear">Remover senha</button></div>
+        </fieldset>
+        <p class="muted">Pela rede não aparecem os botões que agiriam neste PC (abrir pasta, finalizar processos, atualizar a Toolbox…). Na primeira vez, o Firewall do Windows pode perguntar: permita em <b>Redes privadas</b>.</p>
+        <div style="text-align:right"><span id="lanMsg" class="muted"></span> <button class="default" id="lanSave">Salvar</button></div>
+      </div>
+    </div>
   </div>
 
   <footer class="status-bar">

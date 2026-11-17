@@ -68,3 +68,5 @@ tbody tr.highlighted td * { color: inherit; }
 .schem-svg .dim { stroke: #000080; stroke-width: 1; fill: none; }
 .schem-svg .chip { fill: #222; stroke: #000; }
 .schem-svg .pin { font: 10px Tahoma, Arial, sans-serif; fill: #fff; }
+/* Aberto por outro PC da rede: esconde o que agiria no PC do servidor (ver remote.js) */
+.remote .local-only { display: none !important; }

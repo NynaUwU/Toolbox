@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Ferramentas do Windows</title>
-<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css">
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/remote.js"></script>
 <style>
   .cmd { display: flex; gap: 4px; align-items: center; margin: 4px 0; }
   .cmd input { flex: 1; font-family: "Courier New", monospace; font-size: 12px; }
@@ -39,10 +39,9 @@
   </ul>
   <p class="note">⚠ Salve seus trabalhos antes: o PC reinicia automaticamente (30 s de aviso — para cancelar, rode <code>shutdown /a</code>).</p>
 
-  <p><b>Opção 1 — comando</b> (baixa o script e o executa como administrador):</p>
-  <div class="cmd"><label>Qualquer PC:</label><input readonly id="cmdGithub"><button data-copy>📋 Copiar</button></div>
-  <div class="cmd"><label>Este PC (Toolbox):</label><input readonly id="cmdLocal"><button data-copy>📋 Copiar</button></div>
-  <p class="muted">“Qualquer PC” busca o script no GitHub da Toolbox (precisa de internet). “Este PC” busca no servidor da Toolbox e só funciona no computador onde ela está rodando.</p>
+  <p><b>Opção 1 — comando</b> (baixa o script desta Toolbox pela rede e o executa como administrador):</p>
+  <div id="cmds"></div>
+  <p class="muted">Funciona em qualquer PC da mesma rede. O acesso pela rede precisa estar ligado (botão 🌐 Rede, no PC da Toolbox).</p>
 
   <p style="margin-top:8px"><b>Opção 2 — arquivos</b> (copie os dois para o PC e dê dois cliques no <code>.bat</code>):</p>
   <div class="row">
@@ -50,17 +49,20 @@
     <a href="/tools/windows/scripts/Update-Windows.ps1" download><button type="button">⬇ Update-Windows.ps1</button></a>
     <button id="showScript">👁 Ver script</button>
   </div>
-  <div class="cmd"><label>Link do .ps1:</label><input readonly id="linkPs1"><button data-copy>📋 Copiar</button></div>
+  <div id="links"></div>
   <pre id="script" hidden></pre>
 </fieldset>
 
 <script type="module">
 import { api } from "/assets/jobs98.js";
 const $ = id => document.getElementById(id);
-const { rawBase } = await api("/api/windows/info");
-$("cmdGithub").value = `irm ${rawBase}/update.ps1 | iex`;
-$("cmdLocal").value = `irm ${location.origin}/win/update.ps1 | iex`;
-$("linkPs1").value = `${rawBase}/Update-Windows.ps1`;
+// Endereços pelos quais os outros PCs alcançam esta Toolbox (IP da rede); se aberto por outro PC, usa o próprio endereço da página
+const me = await api("/api/whoami");
+const bases = me.local ? me.urls.filter(u => !u.virtual).map(u => u.url) : [location.origin];
+if (!bases.length) bases.push(location.origin);
+const row = (label, value) => `<div class="cmd"><label>${label}</label><input readonly value="${value}"><button data-copy>📋 Copiar</button></div>`;
+$("cmds").innerHTML = bases.map((b, i) => row(bases.length > 1 ? `Rede ${i + 1}:` : "Comando:", `irm ${b}/win/update.ps1 | iex`)).join("");
+$("links").innerHTML = bases.map(b => row("Link do .ps1:", `${b}/tools/windows/scripts/Update-Windows.ps1`)).join("");
 
 document.addEventListener("click", async e => {
   const copy = e.target.closest("[data-copy]");

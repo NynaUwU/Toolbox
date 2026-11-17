@@ -36,7 +36,7 @@ export function trackJob(container, id, title) {
         files.innerHTML = job.files.map(f => {
           const q = encodeURIComponent(f);
           return `<div>💾 <a href="/api/files?f=${q}" download>${esc(f)}</a>
-            <button class="link" data-f="${esc(f)}">mostrar na pasta</button></div>`;
+            <button class="link local-only" data-f="${esc(f)}">mostrar na pasta</button></div>`;
         }).join("");
         files.querySelectorAll("button[data-f]").forEach(b => (b.onclick = () => post("/api/open-folder", { f: b.dataset.f })));
         if (job.status === "error" && job.log?.length) {

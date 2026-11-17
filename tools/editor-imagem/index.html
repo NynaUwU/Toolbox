@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Editor de imagens</title>
-<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css">
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/remote.js"></script>
 <style>
   html, body { height: 100%; overflow: hidden; }
   body { display: flex; flex-direction: column; gap: 4px; padding: 4px; }
@@ -536,7 +536,7 @@ $("save").onclick = async () => {
   try {
     const r = await fetch(`/api/save-image?name=${encodeURIComponent(docName)}`, { method: "POST", headers: { "Content-Type": blob.type }, body: blob });
     const j = await r.json(); if (!r.ok) throw new Error(j.error);
-    $("msg").innerHTML = `✔ Salvo: <a href="/api/files?f=${encodeURIComponent(j.file)}" download>${j.file}</a> <button class="link" id="showF">mostrar na pasta</button>`;
+    $("msg").innerHTML = `✔ Salvo: <a href="/api/files?f=${encodeURIComponent(j.file)}" download>${j.file}</a> <button class="link local-only" id="showF">mostrar na pasta</button>`;
     $("showF").onclick = () => fetch("/api/open-folder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ f: j.file }) });
   } catch (e) { msg("Falha ao salvar: " + e.message, true); }
 };

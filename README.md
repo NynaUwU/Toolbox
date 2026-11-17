@@ -17,7 +17,7 @@ Central pessoal de ferramentas que roda **só no seu computador** (http://localh
 | 🔌 Pinagem de conectores | 42 conectores com desenho clicável e cores de fio: USB (A/C/micro/mini), HDMI, DP, VGA, DVI, RJ45/RJ11, áudio, ATX/EPS/PCIe/SATA/Molex, GPIO, ISP, SWD, OBD-II e antigos (serial, paralela, PS/2, AT, MIDI, SCART, IDE, disquete, game port, fonte AT…) | — |
 | 🔬 Simulador de circuitos | CircuitJS (Falstad, online) + calculadoras offline **com o esquema do circuito desenhado ao vivo**: Ohm, divisor, LED, código de cores, série/paralelo, RC/RL, LC, 555, bobinas | — |
 | 📊 Gerenciador de tarefas | CPU (por núcleo), memória, rede, discos, **temperaturas**, processos (finalizar), informações do PC | PowerShell / netstat; LibreHardwareMonitor portátil (opcional) |
-| 🪛 Ferramentas do Windows | Comandos para copiar e arquivos para baixar: WinUtil (Chris Titus) e atualização forçada do Windows (script próprio, via GitHub ou `/win/update.ps1`). A Toolbox não executa nada | — |
+| 🪛 Ferramentas do Windows | Comandos para copiar e arquivos para baixar: WinUtil (Chris Titus) e atualização forçada do Windows (script próprio, baixado pela rede em `/win/update.ps1`). A Toolbox não executa nada | — |
 | 📡 Dispositivos na rede | IP, nome, fabricante e MAC dos aparelhos — faixa pela máscara (até /16 = 255.255.0.0) | sondagem TCP + tabela ARP do Windows |
 | 🔢 Contador de texto | Caracteres, palavras, linhas, tempo de leitura | — |
 
@@ -40,6 +40,13 @@ Nada vai para o Windows: sem instalador, sem winget, sem admin, sem registro. Pa
 
 Para abrir sem a janela preta na frente, use **`Toolbox (minimizado).vbs`**.
 Para iniciar junto com o Windows: `Win + R` → `shell:startup` → cole ali um atalho do `.vbs`.
+
+## Acesso pela rede
+
+- Outros PCs/celulares da mesma rede abrem `http://<IP do PC>:3098` (o endereço aparece na janela do servidor e no botão **🌐 Rede**).
+- No botão **🌐 Rede** (só no PC da Toolbox): ligar/desligar o acesso pela rede e definir uma senha.
+- Pela rede, ficam ocultas/bloqueadas as ações que agiriam no PC da Toolbox (abrir pasta, finalizar processos, atualizar a Toolbox/yt-dlp, baixar LibreOffice/LibreHardwareMonitor).
+- Na primeira vez, o Firewall do Windows pergunta sobre o `node.exe`: permita em **Redes privadas**.
 
 ## Atualizações automáticas (sem git)
 
