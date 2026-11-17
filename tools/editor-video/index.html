@@ -92,14 +92,14 @@
         <div class="field-row"><label for="gw" style="width:70px">Largura</label><input id="gw" type="number" value="480" min="64" max="1280" step="10" style="width:60px"> px</div>
       </div>
       <p class="muted" id="outInfo"></p>
-      <div class="row"><button id="export" class="default" disabled>▶ Exportar</button><button class="local-only" id="folder">📂 Pasta</button></div>
+      <div class="row"><button id="export" class="default" disabled>▶ Exportar</button></div>
     </fieldset>
     <div id="jobs"></div>
   </div>
 </div>
 
 <script type="module">
-import { api, post, trackJob, openOutput } from "/assets/jobs98.js";
+import { api, post, trackJob, downloadUrl } from "/assets/jobs98.js";
 const $ = id => document.getElementById(id);
 const v = $("v"), tl = $("tl");
 let rec = null, segs = [], markIn = null, markOut = null, crop = null;
@@ -280,7 +280,6 @@ $("export").onclick = async () => {
   try { const { id } = await post(`/api/video/${rec.id}/export`, body); trackJob($("jobs"), id, `Exportar ${$("fmt").value.toUpperCase()}`); }
   catch (e) { alert(e.message); }
 };
-$("folder").onclick = openOutput;
 
 // ================= Quadro como imagem =================
 $("bShot").onclick = async () => {
@@ -291,8 +290,9 @@ $("bShot").onclick = async () => {
   const r = await fetch(`/api/save-image?name=${encodeURIComponent(name)}`, { method: "POST", headers: { "Content-Type": "image/png" }, body: blob });
   const j = await r.json();
   const div = document.createElement("fieldset"); div.className = "job";
-  div.innerHTML = `<legend>📷 Quadro ${fmtT(v.currentTime)}</legend>💾 <a href="/api/files?f=${encodeURIComponent(j.file)}" download>${j.file}</a><br><button class="link" id="toEditor">abrir no Editor de imagens</button>`;
+  div.innerHTML = `<legend>📷 Quadro ${fmtT(v.currentTime)}</legend><div class="row"><button id="dlShot">⬇ Baixar</button><span>${j.file.split(/[\\/]/).pop()}</span></div><button class="link" id="toEditor">abrir no Editor de imagens</button>`;
   $("jobs").prepend(div);
+  div.querySelector("#dlShot").onclick = () => downloadUrl(`/api/files?f=${encodeURIComponent(j.file)}`);
   div.querySelector("#toEditor").onclick = () => { try { sessionStorage.setItem("editor-open", j.file); } catch {} top.location.hash = "#/tools/editor-imagem/"; };
 };
 

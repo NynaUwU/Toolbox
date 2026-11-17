@@ -1,7 +1,0 @@
-{
-  "title": "Gerenciador de tarefas",
-  "description": "Uso de CPU, memória, discos e rede, processos e informações do PC que roda a Toolbox.",
-  "icon": "📊",
-  "order": 1,
-  "category": "Sistema e rede"
-}

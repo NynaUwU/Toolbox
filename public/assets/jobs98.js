@@ -35,10 +35,9 @@ export function trackJob(container, id, title) {
       if (job.status !== "running") {
         files.innerHTML = job.files.map(f => {
           const q = encodeURIComponent(f);
-          return `<div>💾 <a href="/api/files?f=${q}" download>${esc(f)}</a>
-            <button class="link local-only" data-f="${esc(f)}">mostrar na pasta</button></div>`;
+          return `<div class="row" style="margin-top:4px"><button data-dl="/api/files?f=${q}">⬇ Baixar</button> <span>${esc(f.split(/[\\/]/).pop())}</span></div>`;
         }).join("");
-        files.querySelectorAll("button[data-f]").forEach(b => (b.onclick = () => post("/api/open-folder", { f: b.dataset.f })));
+        files.querySelectorAll("button[data-dl]").forEach(b => (b.onclick = () => downloadUrl(b.dataset.dl)));
         if (job.status === "error" && job.log?.length) {
           const pre = document.createElement("details");
           pre.innerHTML = `<summary>Detalhes</summary><div class="log mono">${esc(job.log.join("\n"))}</div>`;
@@ -52,4 +51,8 @@ export function trackJob(container, id, title) {
   });
 }
 
-export const openOutput = () => post("/api/open-folder", {});
+/** Baixa um arquivo de saída pelo navegador (funciona no PC da Toolbox e em qualquer aparelho da rede). */
+export function downloadUrl(url) {
+  const a = document.createElement("a");
+  a.href = url; a.download = ""; document.body.append(a); a.click(); a.remove();
+}

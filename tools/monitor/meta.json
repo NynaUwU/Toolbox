@@ -1,0 +1,7 @@
+{
+  "title": "Monitor de desempenho",
+  "description": "Consumo de hardware do PC da Toolbox: CPU (por núcleo), memória, rede e discos em tempo real.",
+  "icon": "📊",
+  "category": "Sistema e rede",
+  "order": 1
+}

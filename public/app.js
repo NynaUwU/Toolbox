@@ -67,7 +67,6 @@ function route() {
 $("#search").addEventListener("input", renderNav);
 $("#btn-close").onclick = () => { location.hash = "/"; };
 $("#btn-max").onclick = () => document.body.classList.toggle("full");
-$("#btn-folder").onclick = () => post("/api/open-folder");
 addEventListener("hashchange", route);
 addEventListener("keydown", e => { if (e.key === "Escape") document.body.classList.remove("full"); });
 

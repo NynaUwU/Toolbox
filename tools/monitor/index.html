@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitor de desempenho</title>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/remote.js"></script>
+<style>
+  .perf { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 8px; }
+  .graph { background: #000; display: block; width: 100%; height: 110px; image-rendering: pixelated; }
+  .meter { display: flex; align-items: center; gap: 8px; }
+  .meter .progress-indicator { flex: 1; }
+  .cores { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 4px; margin-top: 6px; }
+  .core { background: #000; color: #0f0; font-family: "Courier New", monospace; font-size: 11px; padding: 2px 4px; position: relative; overflow: hidden; }
+  .core i { position: absolute; left: 0; bottom: 0; height: 3px; background: #0f0; }
+  .big-num { font-size: 18px; font-weight: bold; }
+</style>
+</head><body>
+<p class="muted" style="margin:0 0 8px">Consumo de hardware do PC onde a Toolbox está rodando, atualizado a cada 1,5 s.</p>
+<div class="perf">
+  <fieldset><legend>CPU — <span id="cpu-pct" class="big-num">0%</span></legend>
+    <canvas class="graph" id="g-cpu" width="300" height="110"></canvas>
+    <div class="cores" id="cores"></div>
+  </fieldset>
+  <fieldset><legend>Memória — <span id="mem-pct" class="big-num">0%</span></legend>
+    <canvas class="graph" id="g-mem" width="300" height="110"></canvas>
+    <p id="mem-txt" class="mono"></p>
+  </fieldset>
+  <fieldset><legend>Rede</legend>
+    <canvas class="graph" id="g-net" width="300" height="110"></canvas>
+    <p class="mono"><span style="color:#008000">▼ <span id="net-rx">0</span></span> &nbsp; <span style="color:#a00000">▲ <span id="net-tx">0</span></span></p>
+  </fieldset>
+  <fieldset><legend>Discos</legend><div id="disks" class="stack"></div></fieldset>
+</div>
+<p class="muted" id="uptime"></p>
+
+<script type="module">
+import { api } from "/assets/jobs98.js";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const bytes = (b, d = 1) => { const u = ["B", "KB", "MB", "GB", "TB"]; let i = 0; while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; } return `${b.toFixed(i ? d : 0).replace(".", ",")} ${u[i]}`; };
+const rate = b => bytes(b) + "/s";
+const dur = s => { const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60); return `${d ? d + "d " : ""}${h}h ${m}min`; };
+
+// ---------- Gráficos estilo osciloscópio ----------
+const N = 60;
+const hist = { cpu: [], mem: [], rx: [], tx: [] };
+const push = (arr, v) => { arr.push(v); if (arr.length > N) arr.shift(); };
+function draw(id, series, max) {
+  const c = $(id), g = c.getContext("2d"), w = c.width, h = c.height;
+  g.fillStyle = "#000"; g.fillRect(0, 0, w, h);
+  g.strokeStyle = "#004000"; g.lineWidth = 1;
+  for (let x = 0; x <= w; x += w / 12) { g.beginPath(); g.moveTo(x + .5, 0); g.lineTo(x + .5, h); g.stroke(); }
+  for (let y = 0; y <= h; y += h / 5) { g.beginPath(); g.moveTo(0, y + .5); g.lineTo(w, y + .5); g.stroke(); }
+  for (const [data, color] of series) {
+    g.strokeStyle = color; g.lineWidth = 1.5; g.beginPath();
+    data.forEach((v, i) => { const x = w - (data.length - 1 - i) * (w / (N - 1)), y = h - (v / max) * (h - 2) - 1; i ? g.lineTo(x, y) : g.moveTo(x, y); });
+    g.stroke();
+  }
+}
+
+async function tick() {
+  let p;
+  try { p = await api("/api/system/perf"); } catch { return; }
+  const memPct = p.memory.used / p.memory.total * 100;
+  push(hist.cpu, p.cpu.total); push(hist.mem, memPct); push(hist.rx, p.net.rx); push(hist.tx, p.net.tx);
+  $("cpu-pct").textContent = `${Math.round(p.cpu.total)}%`;
+  $("mem-pct").textContent = `${Math.round(memPct)}%`;
+  $("mem-txt").textContent = `Em uso: ${bytes(p.memory.used)} de ${bytes(p.memory.total)} · Livre: ${bytes(p.memory.free)}`;
+  $("cores").innerHTML = p.cpu.perCore.map((v, i) => `<div class="core">#${i} ${Math.round(v)}%<i style="width:${v}%"></i></div>`).join("");
+  $("net-rx").textContent = rate(p.net.rx); $("net-tx").textContent = rate(p.net.tx);
+  $("disks").innerHTML = p.disks.map(d => {
+    const pct = d.used / d.total * 100;
+    return `<div><b>${esc(d.mount)}</b> — ${bytes(d.free)} livres de ${bytes(d.total)}
+      <div class="meter"><div class="progress-indicator segmented"><span class="progress-indicator-bar" style="width:${pct}%"></span></div><span>${Math.round(pct)}%</span></div></div>`;
+  }).join("");
+  $("uptime").textContent = `Ligado há ${dur(p.uptime)}${p.load ? ` · carga ${p.load.map(l => l.toFixed(2)).join(" / ")}` : ""}`;
+  draw("g-cpu", [[hist.cpu, "#0f0"]], 100);
+  draw("g-mem", [[hist.mem, "#ff0"]], 100);
+  draw("g-net", [[hist.rx, "#0f0"], [hist.tx, "#f44"]], Math.max(1024, ...hist.rx, ...hist.tx) * 1.1);
+}
+tick();
+setInterval(() => { if (!document.hidden) tick(); }, 1500);
+</script>
+</body></html>

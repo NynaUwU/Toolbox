@@ -13,7 +13,6 @@ import { detectOffice } from "./lib/office.mjs";
 import { installLibreOfficePortable } from "./lib/installer.mjs";
 import * as sys from "./lib/system.mjs";
 import * as net from "./lib/network.mjs";
-import * as sensors from "./lib/sensors.mjs";
 import * as video from "./lib/video.mjs";
 import * as wintools from "./lib/wintools.mjs";
 import * as access from "./lib/access.mjs";
@@ -43,7 +42,9 @@ app.post("/api/login", (req, res) => {
   res.setHeader("Set-Cookie", access.sessionCookie());
   res.json({ ok: true });
 });
-app.get("/api/whoami", (req, res) => res.json({ local: access.isLocal(req), urls: access.lanUrls(PORT), ...access.settings() }));
+app.get("/api/whoami", (req, res) => res.json({
+  local: access.isLocal(req), ip: access.clientIp(req), urls: access.lanUrls(PORT), ...access.settings(),
+}));
 app.get("/api/settings/lan", access.localOnly, (req, res) => res.json({ ...access.settings(), urls: access.lanUrls(PORT) }));
 app.post("/api/settings/lan", access.localOnly, (req, res) => res.json(access.save(req.body || {})));
 
@@ -230,33 +231,6 @@ app.get("/api/files", (req, res) => {
   res.download(full);
 });
 
-/** Abre a pasta no gerenciador de arquivos; com select=true, abre a pasta do arquivo já com ele destacado. */
-function explorerArgs(target, select) {
-  // O Explorer só entende  /select,"C:\caminho\arquivo"  — se o Node puser aspas no argumento
-  // inteiro ("/select,C:\…", o que acontece quando há espaços), ele ignora e abre “Documentos”.
-  const win = path.win32.normalize(target);
-  return select ? `/select,"${win}"` : `"${win}"`;
-}
-function openInExplorer(target, select) {
-  if (IS_WIN) {
-    spawn("explorer.exe", [explorerArgs(target, select)], { windowsVerbatimArguments: true, detached: true, stdio: "ignore" })
-      .on("error", () => {}).unref();
-    return;
-  }
-  const [cmd, args] = process.platform === "darwin"
-    ? ["open", select ? ["-R", target] : [target]]
-    : ["xdg-open", [select ? path.dirname(target) : target]];
-  spawn(cmd, args, { detached: true, stdio: "ignore" }).on("error", () => {}).unref();
-}
-
-app.post("/api/open-folder", access.localOnly, (req, res) => {
-  const f = req.body?.f;
-  const full = f ? insideDir(OUTPUT, f) : null;
-  if (full && fs.existsSync(full)) openInExplorer(full, true);          // destaca o arquivo
-  else if (full && fs.existsSync(path.dirname(full))) openInExplorer(path.dirname(full), false); // arquivo sumiu: abre a pasta dele
-  else openInExplorer(OUTPUT, false);
-  res.json({ ok: true });
-});
 
 // ---------- Câmbio (com cache para funcionar offline) ----------
 const FX_CACHE = path.join(DATA, "cambio.json");
@@ -305,26 +279,8 @@ app.post("/api/tools/update", access.localOnly, (req, res) => {
   });
 });
 
-// ---------- Gerenciador de tarefas ----------
-app.get("/api/system/info", async (req, res) => res.json(await sys.systemInfo()));
+// ---------- Monitor de desempenho (só leitura) ----------
 app.get("/api/system/perf", async (req, res) => res.json(await sys.performance()));
-app.get("/api/system/processes", async (req, res) => res.json(await sys.processes()));
-app.post("/api/system/kill", access.localOnly, (req, res) => {
-  try { sys.killProcess(req.body?.pid); res.json({ ok: true }); }
-  catch (e) { res.status(400).json({ error: e.code === "EPERM" ? "Sem permissão para finalizar este processo." : e.message }); }
-});
-
-app.get("/api/system/sensors", async (req, res) => res.json(await sensors.sensors()));
-app.post("/api/system/sensors/lhm", access.localOnly, (req, res) => {
-  if (req.body?.action === "start") {
-    try { sensors.startLhm(); return res.json({ ok: true }); }
-    catch (e) { return res.status(400).json({ error: e.message }); }
-  }
-  const job = createJob("lhm", "LibreHardwareMonitor portátil");
-  sensors.downloadLhm(msg => { job.stage = msg; })
-    .then(() => { finishJob(job); try { sensors.startLhm(); } catch {} }, err => finishJob(job, err));
-  res.json({ id: job.id });
-});
 
 // ---------- Dispositivos na rede ----------
 let lastScan = null;

@@ -30,6 +30,7 @@
   </div>
   <div class="progress-indicator segmented" id="bar" hidden style="margin-top:8px"><span class="progress-indicator-bar" style="width:0%"></span></div>
   <p id="msg" class="muted"></p>
+  <div class="row" id="who" style="margin-top:4px"></div>
 </fieldset>
 
 <div class="row">
@@ -54,6 +55,12 @@ const store = { get: k => { try { return JSON.parse(localStorage.getItem(k)); } 
 let known = new Set(store.get("net-known") || []);
 
 const ifaces = await api("/api/network/interfaces");
+// Quem está acessando e onde está o servidor da Toolbox
+const me = await api("/api/whoami");
+const serverIps = ifaces.map(n => n.address);
+const myIp = me.local ? null : me.ip; // no próprio PC, “você” = o servidor
+$("who").innerHTML = `<span class="tag" style="background:#d8f0d8">🧑 Você: <b>${me.local ? "no próprio servidor" : esc(me.ip)}</b></span>
+  <span class="tag" style="background:#d8e4ff">🖥️ Servidor da Toolbox: <b>${serverIps.map(esc).join(", ") || "—"}</b></span>`;
 $("iface").innerHTML = ifaces.map(n => `<option value="${n.address}">${esc(n.name)} — ${n.address}/${n.cidr} (${n.netmask})${n.virtual ? " · virtual" : ""}</option>`).join("")
   || "<option>Nenhuma rede encontrada</option>";
 // Estimativa de tempo conforme o tamanho da faixa
@@ -73,14 +80,17 @@ estimate();
 function render() {
   if (!result) return;
   const q = $("filter").value.trim().toLowerCase();
-  const list = result.devices
+  // garante que “você” apareça, mesmo que seu aparelho não tenha respondido à varredura
+  const devices = myIp && !result.devices.some(d => d.ip === myIp)
+    ? [...result.devices, { ip: myIp, mac: null, vendor: null, hostname: null }] : result.devices;
+  const list = devices
     .filter(d => !q || [d.ip, d.hostname, d.vendor, d.mac].join(" ").toLowerCase().includes(q))
     .sort((a, b) => {
       if (sortKey === "ip") return (ipNum(a.ip) - ipNum(b.ip)) * sortDir;
       return String(a[sortKey] ?? "~").localeCompare(String(b[sortKey] ?? "~")) * sortDir;
     });
   $("list").innerHTML = list.map(d => `<tr class="${known.size && !known.has(d.mac || d.ip) ? "new" : ""}">
-    <td class="ip">${d.ip}${d.self ? '<span class="tag">este PC</span>' : ""}${d.gateway ? '<span class="tag">roteador</span>' : ""}</td>
+    <td class="ip">${d.ip}${d.self ? '<span class="tag" style="background:#d8e4ff">servidor</span>' : ""}${d.ip === myIp || (me.local && d.self) ? '<span class="tag" style="background:#d8f0d8">você</span>' : ""}${d.gateway ? '<span class="tag">roteador</span>' : ""}</td>
     <td>${esc(d.hostname || "—")}</td>
     <td>${esc(d.vendor || "—")}</td>
     <td class="mac">${esc(d.mac || "—")}</td></tr>`).join("")

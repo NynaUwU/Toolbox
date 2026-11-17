@@ -44,14 +44,13 @@
   <div class="row">
     <button class="default" id="go" disabled>▶ Converter</button>
     <button id="clear" disabled>Limpar</button>
-    <button class="local-only" id="folder">📂 Abrir pasta</button>
   </div>
   <p class="muted" id="note"></p>
   <div id="jobs"></div>
 </div>
 
 <script type="module">
-import { api, post, trackJob, openOutput } from "/assets/jobs98.js";
+import { api, post, trackJob } from "/assets/jobs98.js";
 const $ = id => document.getElementById(id);
 const AUDIO = ["mp3", "wav", "m4a", "ogg", "flac", "opus", "aac"];
 const LABEL = { mp3: "MP3", wav: "WAV", m4a: "M4A", ogg: "OGG", flac: "FLAC", opus: "OPUS", aac: "AAC",
@@ -141,7 +140,6 @@ drop.ondragleave = () => drop.classList.remove("over");
 drop.ondrop = e => { e.preventDefault(); drop.classList.remove("over"); add(e.dataTransfer.files); };
 $("all").onchange = () => { if ($("all").value) { queue.forEach(q => q.group && (q.target = $("all").value)); render(); } };
 $("clear").onclick = () => { queue = []; render(); };
-$("folder").onclick = openOutput;
 
 $("go").onclick = async () => {
   const items = queue.filter(q => q.group);
