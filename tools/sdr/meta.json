@@ -1,0 +1,1 @@
+{ "title": "Rádio SDR (genérico)", "description": "Espectro e cascata de qualquer frequência (24 MHz–1,7 GHz) com FM/AM/SSB e decodificadores: APRS, DTMF, controles OOK e pulsos de hora.", "icon": "📻", "category": "Rádio (RTL-SDR)", "order": 1 }

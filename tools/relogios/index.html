@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Relógios globais</title>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/remote.js"></script><script src="/assets/table98.js" defer></script>
+<style>
+  .utc { font: bold 42px "Courier New", monospace; text-align: center; background: #000; color: #0f0; padding: 8px; letter-spacing: 2px; }
+  .utc small { font-size: 18px; color: #6c6; }
+  .clocks { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+  .clock { background: #000; color: #0f0; padding: 6px 8px; position: relative; }
+  .clock b { display: block; color: #fff; font: bold 12px Tahoma; }
+  .clock .t { font: bold 24px "Courier New", monospace; }
+  .clock .d { font: 11px Tahoma; color: #8c8; }
+  .clock button { position: absolute; right: 2px; top: 2px; min-width: 0; padding: 0 4px; height: 16px; font-size: 9px; }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 3px 12px; }
+  #ntp td, #ntp th { padding: 2px 6px; font-family: "Courier New", monospace; }
+  #prof { width: 100%; height: 110px; display: block; background: #000; }
+</style>
+</head><body class="stack">
+<div class="utc" id="utc">--:--:--</div>
+<fieldset><legend>🌐 Sincronia (NTP)</legend>
+  <div class="kv">
+    <span>Relógio do servidor da Toolbox:</span><b id="srvOff">—</b>
+    <span>Relógio deste navegador:</span><b id="brOff">—</b>
+    <span>Hora exibida:</span><span>corrigida pelos servidores de hora (mediana dos 3 mais rápidos)</span>
+  </div>
+  <div class="sunken-panel" style="margin-top:6px"><table class="interactive" style="width:100%"><thead><tr><th>Servidor</th><th>Desvio</th><th>Atraso de rede</th><th>Estrato</th></tr></thead><tbody id="ntp"></tbody></table></div>
+  <div class="row" style="margin-top:4px"><button id="recheck">Verificar de novo</button><span class="muted" id="checked"></span></div>
+</fieldset>
+<fieldset><legend>🗺️ Cidades</legend>
+  <div class="clocks" id="clocks"></div>
+  <div class="row" style="margin-top:6px"><select id="addZone"></select><button id="add">+ Adicionar</button></div>
+</fieldset>
+<fieldset><legend>📻 Sinais de hora por rádio (ondas curtas)</legend>
+  <p class="muted">Estações que transmitem pulsos de segundo e hora falada. Ficam em HF (2,5–25 MHz): precisa de RTL-SDR V4 (HF nativo) ou V3 com “Amostragem direta: Ramo Q” (Ajustes avançados) e uma antena de fio comprido. O detector mede onde cai o pulso de cada segundo em relação ao relógio do servidor (aproximado: inclui atrasos de propagação e de processamento).</p>
+  <div id="sdr"></div>
+  <canvas id="prof" width="1000" height="110"></canvas>
+  <p id="tick" class="muted">Sintonize uma estação e aguarde ~20 s para o perfil aparecer.</p>
+</fieldset>
+<div id="log"></div>
+<script type="module">
+import { SdrPanel, SdrLog } from "/assets/sdr98.js";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const store = { get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+const ZONES = [["São Paulo", "America/Sao_Paulo"], ["Manaus", "America/Manaus"], ["Fernando de Noronha", "America/Noronha"], ["Rio Branco", "America/Rio_Branco"],
+  ["Buenos Aires", "America/Argentina/Buenos_Aires"], ["Nova York", "America/New_York"], ["Chicago", "America/Chicago"], ["Los Angeles", "America/Los_Angeles"],
+  ["Cidade do México", "America/Mexico_City"], ["Londres", "Europe/London"], ["Lisboa", "Europe/Lisbon"], ["Paris", "Europe/Paris"], ["Berlim", "Europe/Berlin"],
+  ["Moscou", "Europe/Moscow"], ["Dubai", "Asia/Dubai"], ["Índia (Mumbai)", "Asia/Kolkata"], ["Pequim", "Asia/Shanghai"], ["Tóquio", "Asia/Tokyo"], ["Seul", "Asia/Seoul"],
+  ["Sydney", "Australia/Sydney"], ["Auckland", "Pacific/Auckland"], ["Honolulu", "Pacific/Honolulu"], ["Joanesburgo", "Africa/Johannesburg"], ["Cairo", "Africa/Cairo"]];
+let cities = store.get("clock-cities", ["America/Sao_Paulo", "America/Manaus", "America/New_York", "Europe/London", "Europe/Lisbon", "Asia/Tokyo", "Australia/Sydney"]);
+let corr = 0; // ms a somar ao relógio do navegador para obter a hora exata
+
+// ---------- Desvios ----------
+async function measureBrowser() {
+  let best = null;
+  for (let i = 0; i < 5; i++) {
+    const t0 = Date.now(), { now } = await (await fetch("/api/clock/now", { cache: "no-store" })).json(), t1 = Date.now();
+    const off = now - (t0 + t1) / 2, rtt = t1 - t0; if (!best || rtt < best.rtt) best = { off, rtt };
+  }
+  return best;
+}
+const fmtOff = ms => ms == null ? "—" : `${ms > 0 ? "atrasado" : "adiantado"} ${Math.abs(ms) >= 1000 ? (Math.abs(ms) / 1000).toFixed(2) + " s" : Math.abs(Math.round(ms)) + " ms"}`;
+async function check() {
+  $("checked").textContent = "verificando…";
+  const [b, n] = await Promise.all([measureBrowser(), (await fetch("/api/clock/ntp")).json()]);
+  $("ntp").innerHTML = n.results.map(r => `<tr><td>${esc(r.server)}</td><td>${r.offset != null ? (r.offset > 0 ? "+" : "") + r.offset + " ms" : esc(r.error)}</td><td>${r.delay != null ? r.delay + " ms" : ""}</td><td>${r.stratum ?? ""}</td></tr>`).join("");
+  const srv = n.offset; // hora real = hora do servidor + srv
+  $("srvOff").textContent = srv == null ? "sem resposta dos servidores de hora (UDP 123 bloqueado?)" : `${fmtOff(srv)} em relação à hora oficial`;
+  const brTrue = b.off + (srv || 0);
+  $("brOff").textContent = `${fmtOff(brTrue)} ${srv == null ? "em relação ao servidor" : "em relação à hora oficial"} (medição pela rede ±${Math.round(b.rtt / 2)} ms)`;
+  corr = brTrue; $("checked").textContent = `verificado às ${new Date().toLocaleTimeString("pt-BR")}`;
+}
+$("recheck").onclick = check;
+
+// ---------- Relógios ----------
+$("addZone").innerHTML = ZONES.map(([n, z]) => `<option value="${z}">${esc(n)}</option>`).join("");
+$("add").onclick = () => { if (!cities.includes($("addZone").value)) { cities.push($("addZone").value); store.set("clock-cities", cities); renderClocks(); } };
+function renderClocks() {
+  $("clocks").innerHTML = cities.map(z => `<div class="clock" data-z="${z}"><button data-del="${z}" title="Remover">✕</button><b>${esc((ZONES.find(x => x[1] === z) || [z])[0])}</b><div class="t">--:--:--</div><div class="d"></div></div>`).join("");
+}
+$("clocks").addEventListener("click", e => { const d = e.target.closest("[data-del]"); if (d) { cities = cities.filter(z => z !== d.dataset.del); store.set("clock-cities", cities); renderClocks(); } });
+function tickClocks() {
+  const now = new Date(Date.now() + corr);
+  const ms = String(now.getUTCMilliseconds()).padStart(3, "0").slice(0, 1);
+  $("utc").innerHTML = `${now.toISOString().slice(11, 19)}<small>.${ms} UTC · ${now.toLocaleDateString("pt-BR", { timeZone: "UTC", weekday: "short", day: "2-digit", month: "short", year: "numeric" })}</small>`;
+  for (const el of document.querySelectorAll(".clock")) {
+    const z = el.dataset.z;
+    el.querySelector(".t").textContent = now.toLocaleTimeString("pt-BR", { timeZone: z });
+    el.querySelector(".d").textContent = now.toLocaleDateString("pt-BR", { timeZone: z, weekday: "short", day: "2-digit", month: "short" }) + " · " +
+      (new Intl.DateTimeFormat("pt-BR", { timeZone: z, timeZoneName: "shortOffset" }).formatToParts(now).find(p => p.type === "timeZoneName")?.value || "");
+  }
+}
+renderClocks(); setInterval(tickClocks, 100); check(); setInterval(check, 10 * 60000);
+
+// ---------- Rádio: sinais de hora ----------
+const S = (label, mhz) => ({ label, freq: mhz * 1e6, mode: "am", bw: 6000, extra: { decoders: ["ticks"] } });
+const log = new SdrLog($("log"), "Log dos pulsos");
+function drawProfile(p, off) {
+  const c = $("prof"), g = c.getContext("2d"), W = c.width = c.clientWidth || 1000, H = c.height, m = Math.max(...p, 1e-12);
+  g.fillStyle = "#000"; g.fillRect(0, 0, W, H); g.fillStyle = "#0f0";
+  p.forEach((v, i) => { const h = (v / m) * (H - 16); g.fillRect((i / p.length) * W, H - 14 - h, W / p.length - 1, h); });
+  g.fillStyle = "#6c6"; g.font = "10px Tahoma"; for (let ms = 0; ms < 1000; ms += 100) g.fillText(`${ms} ms`, (ms / 1000) * W + 2, H - 2);
+  g.fillStyle = "#ff0"; g.fillText(`pulso em ${off >= 0 ? "+" : ""}${off} ms`, 6, 12);
+}
+new SdrPanel($("sdr"), {
+  tool: "Relógios", step: 1000, centerOffset: 250e3,
+  presets: [{ group: "WWV (EUA, Colorado)" }, S("WWV 2,5 MHz", 2.5), S("WWV 5 MHz", 5), S("WWV 10 MHz", 10), S("WWV 15 MHz", 15), S("WWV 20 MHz", 20),
+    { group: "WWVH (Havaí)" }, S("WWVH 5 MHz", 5), S("WWVH 10 MHz", 10), S("WWVH 15 MHz", 15),
+    { group: "CHU (Canadá)" }, S("CHU 3,330 MHz", 3.33), S("CHU 7,850 MHz", 7.85), S("CHU 14,670 MHz", 14.67),
+    { group: "BPM (China)" }, S("BPM 5 MHz", 5), S("BPM 10 MHz", 10), S("BPM 15 MHz", 15),
+    { group: "RWM (Rússia)" }, S("RWM 4,996 MHz", 4.996), S("RWM 9,996 MHz", 9.996), S("RWM 14,996 MHz", 14.996)],
+  onEvent: ev => { log.add(ev); if (ev.type === "ticks") { drawProfile(ev.profile, ev.offset); $("tick").textContent = ev.text; } },
+});
+</script>
+</body></html>

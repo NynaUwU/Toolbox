@@ -4,7 +4,7 @@ import multer from "multer";
 import fs from "node:fs";
 import path from "node:path";
 import { spawn, execFile } from "node:child_process";
-import { ROOT, OUTPUT, TMP, DATA, IS_WIN, findTool, insideDir, safeName, uniquePath, outDir } from "./lib/paths.mjs";
+import { ROOT, OUTPUT, TMP, DATA, IS_WIN, findTool, insideDir, safeName, uniquePath, outDir, readConfig, writeConfig } from "./lib/paths.mjs";
 import { createJob, getJob, listJobs, finishJob, hasRunning } from "./lib/jobs.mjs";
 import { GROUPS, groupFor, convert } from "./lib/convert.mjs";
 import { download, FORMATS, listPlaylist } from "./lib/youtube.mjs";
@@ -16,6 +16,11 @@ import * as net from "./lib/network.mjs";
 import * as video from "./lib/video.mjs";
 import * as wintools from "./lib/wintools.mjs";
 import * as access from "./lib/access.mjs";
+import { WebSocketServer } from "ws";
+import { hub } from "./lib/sdr/hub.mjs";
+import * as sdrInstall from "./lib/sdr/install.mjs";
+import * as sats from "./lib/sdr/sat.mjs";
+import * as clock from "./lib/clock.mjs";
 
 const PORT = Number(process.env.TOOLBOX_PORT) || 3098;
 const HOST = "0.0.0.0"; // aceita conexões da rede local (ver lib/access.mjs)
@@ -50,6 +55,8 @@ app.post("/api/settings/lan", access.localOnly, (req, res) => res.json(access.sa
 
 // ---------- Arquivos estáticos ----------
 app.use("/vendor/98", express.static(path.join(ROOT, "node_modules", "98.css", "dist")));
+app.get("/vendor/satellite.js", (req, res) => res.sendFile(path.join(ROOT, "node_modules", "satellite.js", "dist", "satellite.min.js")));
+app.get("/vendor/topojson.js", (req, res) => res.sendFile(path.join(ROOT, "node_modules", "topojson-client", "dist", "topojson-client.min.js")));
 app.use("/tools", express.static(path.join(ROOT, "tools")));
 app.use("/sites", express.static(path.join(ROOT, "sites")));
 app.use("/", express.static(path.join(ROOT, "public")));
@@ -179,6 +186,34 @@ app.get("/win/update.ps1", (req, res) => {
   res.type("text/plain; charset=utf-8").send(wintools.bootstrap(`http://${req.get("host")}/tools/windows/scripts`));
 });
 
+// ---------- Rádio SDR ----------
+app.get("/api/sdr/tools", (req, res) => res.json({ tools: sdrInstall.status(), demo: Boolean(readConfig().sdrDemo), device: hub.device }));
+app.post("/api/sdr/install", access.localOnly, (req, res) => {
+  const name = String(req.body?.name || "");
+  const job = createJob("sdr-install", `Baixar ${name}`);
+  sdrInstall.install(name, { log: m => { job.stage = m; }, onProgress: p => { job.progress = p; } })
+    .then(() => { finishJob(job); if (name === "rtl_tcp") hub.restartSource(); }, err => finishJob(job, err));
+  res.json({ id: job.id });
+});
+app.post("/api/sdr/zadig", access.localOnly, (req, res) => {
+  try { sdrInstall.openZadig(); res.json({ ok: true }); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.post("/api/sdr/demo", access.localOnly, (req, res) => { writeConfig({ sdrDemo: !!req.body?.on }); hub.restartSource(); res.json({ demo: !!req.body?.on }); });
+
+// ---------- Satélites ----------
+app.get("/api/sat/info", async (req, res) => { try { res.json(await sats.info()); } catch (e) { res.status(500).json({ error: e.message }); } });
+app.post("/api/sat/tle", async (req, res) => { await sats.getTle(true); res.json(await sats.info()); });
+app.post("/api/sat/observer", (req, res) => { try { res.json(sats.setObserver(req.body || {})); } catch (e) { res.status(400).json({ error: e.message }); } });
+app.post("/api/sat/auto", (req, res) => res.json(sats.setAuto(req.body?.norad, req.body?.on)));
+app.post("/api/sat/record", async (req, res) => {
+  try { res.json(req.body?.on ? sats.startPass(req.body.norad) : await sats.stopPass()); } catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.get("/api/sat/images", (req, res) => res.json(sats.listImages().slice(0, 80)));
+
+// ---------- Relógios ----------
+app.get("/api/clock/ntp", async (req, res) => res.json(await clock.checkAll()));
+app.get("/api/clock/now", (req, res) => res.json({ now: Date.now() }));
+
 // ---------- Editor de vídeo ----------
 app.post("/api/video/upload", upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Nenhum arquivo enviado." });
@@ -214,11 +249,13 @@ app.post("/api/video/:id/export", (req, res) => {
 setInterval(video.cleanup, 3600e3);
 
 // ---------- Salvar imagem (editor de imagens / quadro de vídeo) ----------
-app.post("/api/save-image", express.raw({ type: "image/*", limit: "300mb" }), (req, res) => {
-  const ext = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" }[req.get("content-type")];
+app.post("/api/save-image", express.raw({ type: ["image/*", "video/webm"], limit: "500mb" }), (req, res) => {
+  const type = String(req.get("content-type") || "").split(";")[0];
+  const ext = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "video/webm": "webm" }[type];
   if (!ext || !req.body?.length) return res.status(400).json({ error: "Imagem inválida." });
   const base = safeName(String(req.query.name || "imagem").replace(/\.[a-z0-9]+$/i, ""));
-  const out = uniquePath(outDir("Imagens"), base, ext);
+  const folder = ext === "webm" ? "Vídeos" : String(req.query.folder || "") === "sdr" ? path.join("SDR", "Capturas") : "Imagens";
+  const out = uniquePath(outDir(folder), base, ext);
   fs.writeFileSync(out, req.body);
   res.json({ file: path.relative(OUTPUT, out) });
 });
@@ -329,7 +366,7 @@ fs.rmSync(TMP, { recursive: true, force: true });
 fs.mkdirSync(TMP, { recursive: true });
 await updater.currentVersion();
 
-app.listen(PORT, HOST, () => {
+const httpServer = app.listen(PORT, HOST, () => {
   const url = `http://localhost:${PORT}`;
   const lan = access.lanUrls(PORT).filter(u => !u.virtual).map(u => `    ${u.url}`).join("\n");
   console.log(`\n  Toolbox rodando em ${url}`);
@@ -343,4 +380,11 @@ app.listen(PORT, HOST, () => {
     setTimeout(autoUpdate, 5000);
     setInterval(autoUpdate, AUTO_UPDATE_MIN * 60 * 1000);
   }
+});
+
+// WebSocket do rádio SDR (espectro, áudio, eventos). Mesma regra de acesso das páginas.
+const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
+httpServer.on("upgrade", (req, socket, head) => {
+  if (!req.url.startsWith("/ws/sdr") || !access.allowUpgrade(req)) { socket.destroy(); return; }
+  wss.handleUpgrade(req, socket, head, ws => hub.attach(ws, req));
 });

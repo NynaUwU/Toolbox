@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Controles remotos 433 MHz</title>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/remote.js"></script><script src="/assets/table98.js" defer></script>
+<style>
+  #pulses { width: 100%; height: 90px; display: block; background: #000; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; } @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+  table td, table th { white-space: nowrap; padding: 2px 6px; }
+  td.mono, .mono { font-family: "Courier New", monospace; }
+  input.name { width: 120px; }
+</style>
+</head><body class="stack">
+<div id="sdr"></div>
+<fieldset><legend>〰 Pulsos do último sinal <span class="muted" id="pinfo"></span></legend>
+  <canvas id="pulses" width="1000" height="90"></canvas>
+  <div class="row" style="margin-top:4px"><button id="savePulses">📷 Salvar imagem dos pulsos</button><span class="muted">Linha alta = portadora ligada. Larguras em µs — curto/longo = bits 0/1 na maioria dos controles (EV1527, PT2262…).</span></div>
+</fieldset>
+<div class="cols">
+  <fieldset><legend>🔑 Códigos recebidos (OOK)</legend>
+    <div class="sunken-panel" style="max-height:220px;overflow:auto"><table class="interactive" style="width:100%"><thead><tr><th>Nome</th><th>Código</th><th>Bits</th><th>Vezes</th><th>Último</th></tr></thead><tbody id="codes"></tbody></table></div>
+    <p class="muted">Dê um nome aos códigos (ex.: “Portão”, “Campainha”) — fica salvo neste navegador.</p>
+  </fieldset>
+  <fieldset><legend>🌡️ Aparelhos reconhecidos (rtl_433)</legend>
+    <div class="sunken-panel" style="max-height:220px;overflow:auto"><table class="interactive" style="width:100%"><thead><tr><th>Modelo</th><th>ID</th><th>Dados</th><th>Último</th></tr></thead><tbody id="devs"><tr><td colspan="4" class="muted">Nada ainda.</td></tr></tbody></table></div>
+    <p id="r433" class="muted"></p>
+  </fieldset>
+</div>
+<div id="log"></div>
+<script type="module">
+import { SdrPanel, SdrLog, saveCanvas } from "/assets/sdr98.js";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const store = { get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+const names = store.get("ook-names", {}), codes = new Map(), devs = new Map();
+const log = new SdrLog($("log"), "Log");
+const PRESET = f => ({ label: `${(f / 1e6).toFixed(2)} MHz`, freq: f, mode: "am", rate: 1024000, centerOffset: 200e3, extra: { decoders: ["ook", "rtl433"] } });
+
+function drawPulses(p) {
+  const c = $("pulses"), g = c.getContext("2d"), W = c.width = c.clientWidth || 1000, H = c.height;
+  g.fillStyle = "#000"; g.fillRect(0, 0, W, H);
+  const total = p.reduce((s, [h, l]) => s + h + Math.min(l, 15000), 0) || 1, k = (W - 10) / total;
+  g.strokeStyle = "#0f0"; g.lineWidth = 1.5; g.beginPath(); let x = 5; g.moveTo(x, H - 20);
+  for (const [h, l] of p) { g.lineTo(x, 15); x += h * k; g.lineTo(x, 15); g.lineTo(x, H - 20); x += Math.min(l, 15000) * k; g.lineTo(x, H - 20); }
+  g.stroke();
+  g.fillStyle = "#6c6"; g.font = "10px Tahoma"; g.fillText(`${p.length} pulsos · ${(total / 1000).toFixed(1)} ms`, 6, H - 5);
+}
+function renderCodes() {
+  $("codes").innerHTML = [...codes.values()].sort((a, b) => b.last - a.last).map(c => `<tr><td><input class="name" data-hex="${c.hex}" value="${esc(names[c.hex] || "")}" placeholder="dar nome…"></td>
+    <td class="mono">0x${c.hex}</td><td>${c.bits.length}</td><td>${c.n}</td><td>${new Date(c.last).toLocaleTimeString("pt-BR")}</td></tr>`).join("") || '<tr><td colspan="5" class="muted">Aperte um controle perto da antena…</td></tr>';
+}
+$("codes").addEventListener("change", e => { const i = e.target.closest("input[data-hex]"); if (i) { names[i.dataset.hex] = i.value; store.set("ook-names", names); } });
+function renderDevs() {
+  $("devs").innerHTML = [...devs.values()].sort((a, b) => b.last - a.last).map(d => `<tr><td>${esc(d.model)}</td><td class="mono">${esc(d.id ?? "")}</td>
+    <td class="mono">${esc(Object.entries(d.data).filter(([k]) => !["time", "model", "id", "mod", "freq", "rssi", "snr", "noise", "protocol", "mic"].includes(k)).map(([k, v]) => `${k}=${v}`).join(" "))}</td><td>${new Date(d.last).toLocaleTimeString("pt-BR")}</td></tr>`).join("");
+}
+
+const sdr = new SdrPanel($("sdr"), {
+  tool: "Controles 433", step: 10000, centerOffset: 200e3,
+  presets: [PRESET(433.92e6), PRESET(315e6), PRESET(868.3e6), PRESET(915e6)],
+  profile: { freq: 433.92e6 + 200e3, vfo: -200e3, rate: 1024000, mode: "am", bw: 9000, decoders: ["ook", "rtl433"] },
+  onEvent: ev => {
+    log.add(ev);
+    if (ev.type === "ook") {
+      drawPulses(ev.pulses); $("pinfo").textContent = `· ${new Date().toLocaleTimeString("pt-BR")}`;
+      if (ev.hex) { const c = codes.get(ev.hex) || { hex: ev.hex, bits: ev.bits, n: 0 }; c.n++; c.last = Date.now(); codes.set(ev.hex, c); renderCodes(); }
+    }
+    if (ev.type === "rtl433" && ev.data) { const k = `${ev.data.model}|${ev.data.id ?? ""}|${ev.data.channel ?? ""}`; devs.set(k, { model: ev.data.model, id: ev.data.id, data: ev.data, last: Date.now() }); renderDevs(); }
+  },
+});
+$("savePulses").onclick = () => saveCanvas($("pulses"), "Pulsos OOK");
+renderCodes();
+const t = await (await fetch("/api/sdr/tools")).json();
+$("r433").innerHTML = t.tools.rtl_433.ok ? "✔ rtl_433 ativo: reconhece centenas de sensores e controles conhecidos."
+  : `O rtl_433 (portátil) reconhece centenas de sensores/controles pelo nome. <button class="local-only" id="get433">⬇ Baixar rtl_433</button> Sem ele, o analisador de pulsos acima continua funcionando.`;
+$("get433")?.addEventListener("click", async () => { $("get433").disabled = true; const { id } = await (await fetch("/api/sdr/install", { method: "POST", headers: { "Content-Type": "application/json" }, body: '{"name":"rtl_433"}' })).json(); await sdr.waitJob(id, $("get433")); sdr.tune({ decoders: ["ook"] }); sdr.tune({ decoders: ["ook", "rtl433"] }); });
+</script>
+</body></html>

@@ -1,0 +1,1 @@
+{ "title": "Relógios globais", "description": "Hora exata sincronizada (NTP.br, pool.ntp.org…) para várias cidades, desvio dos relógios e sinais de hora por rádio (WWV, CHU, BPM).", "icon": "🕰️", "category": "Rádio (RTL-SDR)", "order": 6 }

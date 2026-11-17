@@ -1,0 +1,1 @@
+{ "title": "Controles remotos 433 MHz", "description": "Decodifica controles de portão/alarme, sensores de temperatura e campainhas em 315/433/868/915 MHz (analisador de pulsos + rtl_433).", "icon": "🎛️", "category": "Rádio (RTL-SDR)", "order": 3 }

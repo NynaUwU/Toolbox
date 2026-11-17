@@ -6,6 +6,12 @@ Central pessoal de ferramentas que roda **só no seu computador** (http://localh
 
 | Ferramenta | O que faz | Usa |
 |---|---|---|
+| 📻 Rádio SDR (genérico) | Espectro + cascata de 24 MHz–1,7 GHz, FM/AM/SSB, decodificadores APRS, DTMF, OOK e pulsos de hora; grava áudio (WAV) e IQ | RTL-SDR (rtl_tcp portátil) |
+| 🛰️ Satélites do tempo | Globo em tempo real com trajetórias, passagens, gravação automática e imagens (Meteor-M LRPT; NOAA APT desligados em 2025) | satellite.js + SatDump portátil |
+| 🎛️ Controles remotos 433 MHz | Pulsos, códigos (EV1527/PT2262…) e sensores reconhecidos pelo rtl_433 (315/433/868/915 MHz) | rtl_433 portátil (opcional) |
+| ✈️ Rádio (FM, aviação…) | FM, aviação AM, marítimo, radioamador, PMR, favoritos; ADS-B 1090 MHz com mapa | — |
+| 📺 TV analógica | Imagem P&B de 525/625 linhas, canais VHF/UHF, foto e vídeo (WebM) | — |
+| 🕰️ Relógios globais | Hora exata via NTP (NTP.br, pool…), cidades, desvio dos relógios; WWV/CHU/BPM por rádio | — |
 | 🎨 Editor de imagens | Recorte (com proporções), pincel com 6 pontas (redonda, suave, quadrada, caligrafia, marca-texto, spray) e opacidade, borracha, conta-gotas, borrar/pixelar (pincel ou área), retângulos e círculos (vazados ou cheios), imagem por cima (mover/redimensionar/opacidade), girar, espelhar, redimensionar, desfazer | navegador |
 | 🎬 Editor de vídeo | Linha do tempo com trechos (manter ou remover), recorte de área (16:9, 9:16, 1:1…), girar, reduzir, tirar áudio, salvar quadro como imagem; exporta MP4, WEBM, GIF ou MP3 | ffmpeg |
 | 📼 YouTube Downloader | Vários links (um por linha) em fila; playlists abrem uma janela para escolher os vídeos → MP3, M4A, WAV, MP4, WEBM | yt-dlp + ffmpeg |
@@ -40,6 +46,14 @@ Nada vai para o Windows: sem instalador, sem winget, sem admin, sem registro. Pa
 
 Para abrir sem a janela preta na frente, use **`Toolbox (minimizado).vbs`**.
 Para iniciar junto com o Windows: `Win + R` → `shell:startup` → cole ali um atalho do `.vbs`.
+
+## Rádio (RTL-SDR)
+
+- **Driver (uma vez):** o RTL-SDR precisa do driver WinUSB no Windows — a página de qualquer ferramenta de rádio tem o botão para baixar e abrir o **Zadig** (*Options › List All Devices* → *Bulk-In, Interface (Interface 0)* → *WinUSB* → *Replace Driver*). É a única coisa instalada no sistema.
+- **Programas portáteis** (baixados para `runtime\` quando você clica): rtl-sdr (`rtl_tcp`), rtl_433 e SatDump.
+- **Um dongle, uma faixa por vez** (~2,4 MHz): as ferramentas compartilham o rádio — abrir uma re-sintoniza; todos que estão vendo acompanham.
+- **Modo demonstração:** sem dongle, um simulador gera sinais de teste (FM, aviação, APRS, DTMF, controle 433, ADS-B, satélite, TV, WWV).
+- Gravações: `Output\Rádio` (áudio), `Output\SDR\IQ`, `Output\SDR\Capturas`, `Output\SDR\Logs`, `Output\Satélites`.
 
 ## Acesso pela rede
 

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rádio</title>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/remote.js"></script><script src="/assets/table98.js" defer></script>
+<script src="/vendor/topojson.js"></script>
+<style>
+  .fav { display: flex; flex-wrap: wrap; gap: 4px; }
+  .fav button { padding: 2px 8px; }
+  .cols { display: grid; grid-template-columns: minmax(280px, 460px) 1fr; gap: 8px; align-items: start; } @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+  #map { width: 100%; aspect-ratio: 1; background: #000; display: block; touch-action: none; cursor: grab; }
+  #planes td, #planes th { white-space: nowrap; padding: 2px 6px; font-family: "Courier New", monospace; font-size: 11px; }
+</style>
+</head><body class="stack">
+<div id="sdr"></div>
+<fieldset><legend>⭐ Favoritos</legend>
+  <div class="fav" id="favs"></div>
+  <div class="row" style="margin-top:4px"><button id="addFav">★ Salvar a frequência atual</button><span class="muted">Clique com o botão direito num favorito para remover. Frequências de torre/APP do seu aeroporto: consulte o AISWEB (DECEA).</span></div>
+</fieldset>
+<fieldset><legend>✈️ ADS-B — aviões em tempo real (1090 MHz)</legend>
+  <div class="row"><button id="adsbOn" class="default">▶ Ativar ADS-B</button><span class="muted">Muda o rádio para 1090 MHz (2 MS/s). Para ouvir a aviação de novo, escolha uma frequência acima.</span></div>
+  <div class="cols" style="margin-top:6px">
+    <div><canvas id="map" width="460" height="460"></canvas><div class="row"><button id="mzi">+</button><button id="mzo">−</button><span class="muted">Mapa centrado na sua localização (definida em Satélites).</span></div></div>
+    <div class="sunken-panel" style="max-height:470px;overflow:auto"><table class="interactive" style="width:100%"><thead><tr><th>ICAO</th><th>Voo</th><th>Altitude</th><th>Veloc.</th><th>Rumo</th><th>Posição</th><th>Msgs</th><th>Visto</th></tr></thead><tbody id="planes"><tr><td colspan="8">Nenhum avião ainda.</td></tr></tbody></table></div>
+  </div>
+</fieldset>
+<div id="log"></div>
+<script type="module">
+import { SdrPanel, SdrLog, fmtHz } from "/assets/sdr98.js";
+import { Globe } from "/assets/globe.js";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const store = { get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+const P = (label, mhz, mode, bw) => ({ label, freq: mhz * 1e6, mode, ...(bw ? { bw } : {}) });
+const PRESETS = [
+  { group: "Rádio FM comercial" }, ...[89.1, 91.3, 94.7, 98.5, 100.1, 102.1, 105.1, 107.3].map(f => P(`FM ${f.toFixed(1).replace(".", ",")}`, f, "wfm")),
+  { group: "Aviação (AM)" }, P("121,500 Emergência (guarda)", 121.5, "am"), P("123,450 Ar-ar", 123.45, "am"), P("118,100 Torre (exemplo)", 118.1, "am"), P("129,000 (exemplo)", 129, "am"),
+  { group: "Marítimo (FM)" }, P("Canal 16 — 156,800 socorro", 156.8, "nfm"), P("Canal 6 — 156,300", 156.3, "nfm"), P("Canal 13 — 156,650", 156.65, "nfm"),
+  { group: "Radioamador (FM)" }, P("145,570 APRS Brasil", 145.57, "nfm"), P("146,520 chamada 2 m", 146.52, "nfm"), P("145,800 ISS", 145.8, "nfm", 15000),
+  { group: "PMR446 (rádios de mão)" }, ...Array.from({ length: 8 }, (_, i) => P(`PMR canal ${i + 1}`, 446.00625 + i * 0.0125, "nfm")),
+  { group: "Clima NOAA (EUA)" }, ...[162.4, 162.425, 162.45, 162.475, 162.5, 162.525, 162.55].map(f => P(`${f.toFixed(3)} MHz`, f, "nfm")),
+];
+const log = new SdrLog($("log"), "Log");
+const sdr = new SdrPanel($("sdr"), {
+  tool: "Rádio", presets: PRESETS, step: 25000, recName: () => `Rádio ${fmtHz(sdr.tuned())}`,
+  profile: { decoders: [] },
+  onEvent: ev => { if (ev.type !== "adsb") log.add(ev); },
+  onPlanes: list => { planes = list; renderPlanes(); map.draw(); },
+});
+
+// ---------- Favoritos ----------
+let favs = store.get("radio-favs", []);
+function renderFavs() {
+  $("favs").innerHTML = favs.map((f, i) => `<button data-i="${i}" title="${esc(f.mode)}">${esc(f.label)}</button>`).join("") || '<span class="muted">Nenhum favorito.</span>';
+}
+$("favs").addEventListener("click", e => { const b = e.target.closest("[data-i]"); if (b) sdr.applyPreset(favs[+b.dataset.i]); });
+$("favs").addEventListener("contextmenu", e => { const b = e.target.closest("[data-i]"); if (!b) return; e.preventDefault(); favs.splice(+b.dataset.i, 1); store.set("radio-favs", favs); renderFavs(); });
+$("addFav").onclick = () => {
+  const s = sdr.state; if (!s) return;
+  const label = prompt("Nome do favorito:", fmtHz(sdr.tuned())); if (!label) return;
+  favs.push({ label, freq: sdr.tuned(), mode: s.mode, bw: s.bw || undefined }); store.set("radio-favs", favs); renderFavs();
+};
+renderFavs();
+
+// ---------- ADS-B ----------
+let planes = [];
+$("adsbOn").onclick = () => sdr.tune({ freq: 1090e6, vfo: 0, rate: 2000000, mode: "iq", bw: null, decoders: ["adsb"] });
+const obs = (await (await fetch("/api/sat/info")).json()).observer;
+const map = new Globe($("map"), { lat: obs.lat, lon: obs.lon, zoom: 28 });
+map.setLand(topojson.feature(await (await fetch("/assets/geo/countries-110m.json")).json(), "countries"));
+map.onDraw = (g, gl) => {
+  for (const r of [50, 100, 200]) { g.strokeStyle = "rgba(255,255,255,0.25)"; g.setLineDash([3, 4]); gl.path(g, Globe.circle(obs.lat, obs.lon, r / 111.2)); g.setLineDash([]);
+    const [x, y] = gl.proj(obs.lat + r / 111.2, obs.lon); g.fillStyle = "#aaa"; g.font = "10px Tahoma"; g.fillText(`${r} km`, x + 3, y - 2); }
+  const [ox, oy] = gl.proj(obs.lat, obs.lon); g.strokeStyle = "#f33"; g.lineWidth = 2; g.beginPath(); g.moveTo(ox - 5, oy - 5); g.lineTo(ox + 5, oy + 5); g.moveTo(ox + 5, oy - 5); g.lineTo(ox - 5, oy + 5); g.stroke();
+  for (const p of planes) {
+    if (p.lat == null) continue;
+    const [x, y, v] = gl.proj(p.lat, p.lon); if (!v) continue;
+    const h = ((p.heading || 0) - 0) * Math.PI / 180;
+    g.save(); g.translate(x, y); g.rotate(h); g.fillStyle = "#ff0"; g.beginPath(); g.moveTo(0, -8); g.lineTo(5, 6); g.lineTo(0, 3); g.lineTo(-5, 6); g.closePath(); g.fill(); g.restore();
+    g.fillStyle = "#fff"; g.font = "bold 11px Tahoma"; g.fillText(p.callsign || p.icao, x + 8, y - 2);
+    g.fillStyle = "#9cf"; g.font = "10px Tahoma"; g.fillText(`${p.altitude ?? "?"} ft`, x + 8, y + 10);
+  }
+};
+$("mzi").onclick = () => { map.zoom = Math.min(80, map.zoom * 1.4); map.draw(); };
+$("mzo").onclick = () => { map.zoom = Math.max(1, map.zoom / 1.4); map.draw(); };
+function renderPlanes() {
+  const now = Date.now();
+  $("planes").innerHTML = planes.sort((a, b) => b.seen - a.seen).map(p => `<tr><td>${p.icao}</td><td>${esc(p.callsign || "")}</td><td>${p.altitude != null ? p.altitude + " ft" : ""}</td>
+    <td>${p.speed != null ? p.speed + " kt" : ""}</td><td>${p.heading != null ? p.heading + "°" : ""}</td><td>${p.lat != null ? `${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}` : ""}</td>
+    <td>${p.msgs}</td><td>${Math.round((now - p.seen) / 1000)} s</td></tr>`).join("") || '<tr><td colspan="8">Nenhum avião ainda.</td></tr>';
+}
+map.draw();
+setInterval(() => sdr.send({ cmd: "planes" }), 3000);
+</script>
+</body></html>

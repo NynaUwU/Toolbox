@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rádio SDR</title>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/remote.js"></script>
+</head><body class="stack">
+<div id="sdr"></div>
+<fieldset><legend>Decodificadores</legend>
+  <div class="row" id="decs"></div>
+  <p class="muted">Os decodificadores de áudio (APRS, DTMF, pulsos de hora) usam o canal sintonizado — escolha o modo certo (APRS/DTMF: FM estreito; hora: AM). OOK analisa a faixa toda.</p>
+</fieldset>
+<div id="log"></div>
+<script type="module">
+import { SdrPanel, SdrLog } from "/assets/sdr98.js";
+const DECS = [["aprs", "APRS / AX.25 (AFSK 1200)"], ["dtmf", "DTMF (tons de teclado)"], ["ook", "OOK (controles, sensores)"], ["ticks", "Pulsos de hora (WWV/CHU)"]];
+const PRESETS = [
+  { group: "Rádio comercial" }, { label: "FM 98,5 MHz", freq: 98.5e6, mode: "wfm" }, { label: "FM 100,1 MHz", freq: 100.1e6, mode: "wfm" },
+  { group: "Comunicação" }, { label: "APRS Brasil 145,570", freq: 145.57e6, mode: "nfm" }, { label: "APRS EUA / ISS 145,825", freq: 145.825e6, mode: "nfm" },
+  { label: "Radioamador 2 m 146,520", freq: 146.52e6, mode: "nfm" }, { label: "PMR446 canal 1", freq: 446.00625e6, mode: "nfm" },
+  { label: "Marítimo canal 16 (156,8)", freq: 156.8e6, mode: "nfm" },
+  { group: "Aviação" }, { label: "Emergência 121,5 (AM)", freq: 121.5e6, mode: "am" }, { label: "Torre exemplo 118,1 (AM)", freq: 118.1e6, mode: "am" },
+  { group: "Controles / sensores" }, { label: "433,92 MHz (OOK)", freq: 433.92e6, mode: "am", rate: 1024000 },
+];
+const log = new SdrLog(document.getElementById("log"), "Mensagens decodificadas");
+const sdr = new SdrPanel(document.getElementById("sdr"), {
+  tool: "Rádio SDR", presets: PRESETS,
+  profile: {},                    // não muda a sintonia ao abrir: continua de onde estava
+  onEvent: ev => log.add(ev),
+  onState: m => { const on = new Set(m.state.decoders || []); for (const [k] of DECS) document.getElementById("d-" + k).checked = on.has(k); },
+});
+document.getElementById("decs").innerHTML = DECS.map(([k, l]) => `<div class="field-row"><input type="checkbox" id="d-${k}"><label for="d-${k}">${l}</label></div>`).join("");
+document.getElementById("decs").onchange = () => sdr.tune({ decoders: DECS.map(([k]) => k).filter(k => document.getElementById("d-" + k).checked) });
+</script>
+</body></html>

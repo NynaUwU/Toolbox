@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Satélites do tempo</title>
+<link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css"><script src="/assets/remote.js"></script>
+<script src="/vendor/satellite.js"></script><script src="/vendor/topojson.js"></script>
+<style>
+  .top { display: grid; grid-template-columns: minmax(300px, 540px) 1fr; gap: 8px; align-items: start; }
+  @media (max-width: 900px) { .top { grid-template-columns: 1fr; } }
+  #globe { width: 100%; aspect-ratio: 1; display: block; background: #000; cursor: grab; touch-action: none; }
+  #sats td, #sats th { white-space: nowrap; padding: 2px 5px; }
+  #sats td.name b { display: inline-block; width: 10px; height: 10px; margin-right: 4px; border: 1px solid #000; vertical-align: -1px; }
+  #sats tr.off td { color: #777; }
+  .passes { font-family: "Courier New", monospace; font-size: 11px; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+  .gallery a { display: block; background: #000; text-align: center; color: #fff; font-size: 10px; text-decoration: none; overflow: hidden; }
+  .gallery img { width: 100%; height: 110px; object-fit: cover; display: block; }
+  .kv { display: grid; grid-template-columns: max-content 1fr; gap: 2px 8px; }
+</style>
+</head><body class="stack">
+<div class="top">
+  <fieldset style="margin:0"><legend>🌍 Globo — tempo real</legend>
+    <canvas id="globe" width="540" height="540"></canvas>
+    <div class="row" style="margin-top:4px">
+      <label>Seguir <select id="follow"><option value="obs">Minha localização</option></select></label>
+      <button id="zin">+</button><button id="zout">−</button>
+      <span class="muted">Arraste para girar · roda do mouse aproxima · pontilhado = trajetória passada</span>
+    </div>
+  </fieldset>
+  <div class="stack">
+    <fieldset style="margin:0"><legend>🛰️ Satélites e passagens <span class="muted" id="tleAge"></span></legend>
+      <div class="sunken-panel" style="overflow:auto;max-height:360px">
+        <table class="interactive" style="width:100%"><thead><tr><th>Satélite</th><th>Frequência</th><th>Agora</th><th>Próxima passagem</th><th></th></tr></thead><tbody id="sats"></tbody></table>
+      </div>
+      <div class="row" style="margin-top:4px"><button id="tleRefresh">Atualizar órbitas (TLE)</button><span id="recState" class="muted"></span></div>
+      <p class="muted">“Auto” grava sozinho cada passagem acima de 10° e, se o SatDump estiver baixado, gera as imagens no fim (Output\Satélites). Os NOAA de APT foram desligados em 2025; hoje as imagens vêm dos Meteor-M (LRPT).</p>
+    </fieldset>
+    <fieldset style="margin:0"><legend>📍 Sua localização</legend>
+      <div class="row">
+        <label>Lat <input id="lat" type="number" step="0.0001" style="width:90px"></label>
+        <label>Lon <input id="lon" type="number" step="0.0001" style="width:90px"></label>
+        <label>Alt <input id="alt" type="number" step="1" style="width:60px"> m</label>
+        <button id="saveObs">Salvar</button><button id="geo">Usar a do navegador</button>
+      </div>
+    </fieldset>
+    <fieldset style="margin:0" id="satdumpBox"><legend>🖼️ Decodificador (SatDump)</legend><span id="satdumpState"></span></fieldset>
+  </div>
+</div>
+
+<fieldset><legend>📡 Rádio</legend><div id="sdr"></div></fieldset>
+<div id="log"></div>
+<fieldset><legend>🖼️ Imagens decodificadas</legend><div class="gallery" id="gallery"><span class="muted">Nenhuma ainda.</span></div></fieldset>
+
+<script type="module">
+import { SdrPanel, SdrLog, fmtHz } from "/assets/sdr98.js";
+import { Globe, dms } from "/assets/globe.js";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const post = (u, b) => fetch(u, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(b || {}) }).then(r => r.json());
+const hm = t => new Date(t).toLocaleString("pt-BR", { weekday: "short", hour: "2-digit", minute: "2-digit" });
+const RE = 6378.137;
+
+let info = null, recs = [], tracks = {};
+const log = new SdrLog($("log"), "Eventos");
+
+// ---------- Globo ----------
+const globe = new Globe($("globe"), { zoom: 1 });
+globe.setLand(topojson.feature(await (await fetch("/assets/geo/land-110m.json")).json(), "land"));
+
+function satNow(rec, date = new Date()) {
+  const pv = satellite.propagate(rec, date); if (!pv.position) return null;
+  const gd = satellite.eciToGeodetic(pv.position, satellite.gstime(date));
+  return { lat: satellite.degreesLat(gd.latitude), lon: satellite.degreesLong(gd.longitude), h: gd.height };
+}
+function lookAngles(rec, obs, date = new Date()) {
+  const pv = satellite.propagate(rec, date); if (!pv.position) return null;
+  const la = satellite.ecfToLookAngles({ latitude: obs.lat * Math.PI / 180, longitude: obs.lon * Math.PI / 180, height: obs.alt / 1000 }, satellite.eciToEcf(pv.position, satellite.gstime(date)));
+  return { el: la.elevation * 180 / Math.PI, az: la.azimuth * 180 / Math.PI };
+}
+function computeTracks() {
+  const now = Date.now();
+  for (const r of recs) tracks[r.s.norad] = { past: [], next: [] };
+  for (const r of recs) {
+    for (let t = -35; t <= 100; t += 1) { const p = satNow(r.rec, new Date(now + t * 60000)); if (p) tracks[r.s.norad][t < 0 ? "past" : "next"].push([p.lat, p.lon]); }
+  }
+}
+globe.onDraw = (g, gl) => {
+  const obs = info?.observer; if (!obs) return;
+  for (const r of recs) {
+    const tr = tracks[r.s.norad]; if (!tr) continue;
+    g.strokeStyle = r.s.color; g.lineWidth = 1.5;
+    g.setLineDash([2, 4]); gl.path(g, tr.past); g.setLineDash([]); gl.path(g, tr.next);
+    const p = satNow(r.rec); if (!p) continue;
+    const foot = Math.acos(RE / (RE + p.h)) * 180 / Math.PI;
+    g.strokeStyle = r.s.color + "99"; g.lineWidth = 1; gl.path(g, Globe.circle(p.lat, p.lon, foot));
+    const [x, y, v] = gl.proj(p.lat, p.lon);
+    if (v) {
+      g.fillStyle = r.s.color; g.beginPath(); g.arc(x, y, 4.5, 0, 7); g.fill(); g.strokeStyle = "#fff"; g.stroke();
+      g.font = "bold 12px Tahoma"; g.fillText(r.s.name, x + 7, y - 6);
+      g.font = "10px Tahoma"; g.fillStyle = "#ccc"; g.fillText(`${Math.round(p.h)} km`, x + 7, y + 7);
+    }
+  }
+  // observador: “✕” vermelho + linhas até satélites visíveis
+  const [ox, oy, ov] = gl.proj(obs.lat, obs.lon);
+  if (ov) {
+    for (const r of recs) {
+      const la = lookAngles(r.rec, obs), p = satNow(r.rec); if (!la || !p || la.el < 0) continue;
+      const [x, y, v] = gl.proj(p.lat, p.lon); if (!v) continue;
+      g.strokeStyle = "#0ff"; g.lineWidth = 1; g.beginPath(); g.moveTo(ox, oy); g.lineTo(x, y); g.stroke();
+    }
+    g.strokeStyle = "#f33"; g.lineWidth = 2.5; g.beginPath(); g.moveTo(ox - 6, oy - 6); g.lineTo(ox + 6, oy + 6); g.moveTo(ox + 6, oy - 6); g.lineTo(ox - 6, oy + 6); g.stroke();
+    g.fillStyle = "#f66"; g.font = "bold 11px Tahoma"; g.fillText("Você", ox + 8, oy + 12);
+  }
+};
+globe.onOverlay = (g, gl) => {
+  const obs = info?.observer, now = new Date(), W = gl.c.width, H = gl.c.height;
+  g.fillStyle = "#ff0"; g.font = "bold 13px Tahoma"; g.textAlign = "center"; g.fillText("N", W / 2, 12); g.textAlign = "left";
+  g.fillStyle = "#ddd"; g.font = "12px 'Courier New', monospace";
+  const txt = `${now.toUTCString().replace("GMT", "UTC")}${obs ? `  ${dms(obs.lon, "E", "W")} ${dms(obs.lat, "N", "S")}` : ""}`;
+  g.fillText(txt, Math.max(4, (W - g.measureText(txt).width) / 2), H - 4);
+};
+function centerView() {
+  const f = $("follow").value;
+  if (f === "obs" && info) { globe.lat = info.observer.lat; globe.lon = info.observer.lon; }
+  else { const r = recs.find(r => String(r.s.norad) === f); const p = r && satNow(r.rec); if (p) { globe.lat = p.lat; globe.lon = p.lon; } }
+}
+$("follow").onchange = () => { globe.follow = $("follow").value; centerView(); globe.draw(); };
+$("zin").onclick = () => { globe.zoom = Math.min(40, globe.zoom * 1.4); globe.draw(); };
+$("zout").onclick = () => { globe.zoom = Math.max(0.6, globe.zoom / 1.4); globe.draw(); };
+
+// ---------- Tabela de satélites ----------
+async function load(force) {
+  info = force ? await post("/api/sat/tle") : await (await fetch("/api/sat/info")).json();
+  recs = info.sats.filter(s => s.tle).map(s => ({ s, rec: satellite.twoline2satrec(s.tle[0], s.tle[1]) }));
+  $("tleAge").textContent = info.tleAge ? `· órbitas de ${new Date(info.tleAge).toLocaleString("pt-BR")}` : "· sem órbitas (sem internet?)";
+  $("lat").value = info.observer.lat; $("lon").value = info.observer.lon; $("alt").value = info.observer.alt;
+  if ($("follow").options.length === 1) for (const s of info.sats) $("follow").insertAdjacentHTML("beforeend", `<option value="${s.norad}">${esc(s.name)}</option>`);
+  $("recState").textContent = info.recording ? `● gravando ${info.recording.name} desde ${new Date(info.recording.started).toLocaleTimeString("pt-BR")}` : "";
+  renderTable(); computeTracks(); if (!globe.follow) { globe.follow = "obs"; centerView(); } globe.draw();
+}
+function renderTable() {
+  $("sats").innerHTML = info.sats.map(s => {
+    const r = recs.find(r => r.s.norad === s.norad), la = r && lookAngles(r.rec, info.observer);
+    const now = la ? (la.el > 0 ? `<b style="color:#006400">↑ ${la.el.toFixed(0)}° az ${la.az.toFixed(0)}°</b>` : `abaixo (${la.el.toFixed(0)}°)`) : "—";
+    const nx = s.passes[0];
+    const passes = s.passes.map(p => `${hm(p.aos)} · ${p.maxEl}° · ${p.duration} min`).join("\n");
+    const rec = info.recording?.norad === s.norad;
+    return `<tr class="${s.status !== "ativo" ? "off" : ""}" title="${esc(s.mode)} — ${esc(s.status)}">
+      <td class="name"><b style="background:${s.color}"></b>${esc(s.name)}<br><span class="muted">${esc(s.status)}</span></td>
+      <td>${(s.freq / 1e6).toFixed(4)} MHz<br><span class="muted">${esc(s.mode.split(" ")[0])}</span></td>
+      <td>${now}</td>
+      <td class="passes" title="${esc(passes)}">${nx ? `${hm(nx.aos)}<br>máx ${nx.maxEl}° · ${nx.duration} min` : "—"}</td>
+      <td><button data-tune="${s.norad}" title="Sintonizar o rádio">📡</button>
+        <button data-rec="${s.norad}" title="${rec ? "Parar gravação" : "Gravar agora"}">${rec ? "⏹" : "⏺"}</button>
+        <div class="field-row" style="display:inline-flex"><input type="checkbox" id="a${s.norad}" data-auto="${s.norad}" ${s.auto ? "checked" : ""}><label for="a${s.norad}">Auto</label></div></td></tr>`;
+  }).join("");
+}
+$("sats").addEventListener("click", async e => {
+  const t = e.target.closest("[data-tune]"), r = e.target.closest("[data-rec]");
+  if (t) { const s = info.sats.find(s => s.norad === +t.dataset.tune); sdr.applyPreset({ freq: s.freq, mode: s.norad === 25544 ? "nfm" : "iq", bw: s.norad === 25544 ? 15000 : 150000, rate: 1024000 }); }
+  if (r) { const on = info.recording?.norad !== +r.dataset.rec; const res = await post("/api/sat/record", { norad: +r.dataset.rec, on }); if (res.error) alert(res.error); load(); }
+});
+$("sats").addEventListener("change", e => { const a = e.target.closest("[data-auto]"); if (a) post("/api/sat/auto", { norad: +a.dataset.auto, on: a.checked }); });
+$("tleRefresh").onclick = () => load(true);
+$("saveObs").onclick = async () => { const r = await post("/api/sat/observer", { lat: $("lat").value, lon: $("lon").value, alt: $("alt").value }); if (r.error) alert(r.error); load(); };
+$("geo").onclick = () => navigator.geolocation?.getCurrentPosition(p => { $("lat").value = p.coords.latitude.toFixed(4); $("lon").value = p.coords.longitude.toFixed(4); $("alt").value = Math.round(p.coords.altitude || 0); $("saveObs").click(); },
+  () => alert("O navegador não liberou a localização (só funciona no próprio PC ou em HTTPS). Digite as coordenadas."));
+
+// ---------- SatDump e galeria ----------
+async function satdump() {
+  const t = await (await fetch("/api/sdr/tools")).json(), ok = t.tools.satdump.ok;
+  $("satdumpState").innerHTML = ok ? "✔ SatDump pronto — as passagens gravadas viram imagens automaticamente." :
+    `Para transformar as gravações em imagens é preciso o SatDump portátil (~100 MB). <button class="local-only" id="getSd">⬇ Baixar SatDump</button>`;
+  if (!ok && $("getSd")) $("getSd").onclick = async () => { $("getSd").disabled = true; const { id } = await post("/api/sdr/install", { name: "satdump" }); await sdr.waitJob(id, $("getSd")); satdump(); };
+}
+async function gallery() {
+  const imgs = await (await fetch("/api/sat/images")).json();
+  if (!imgs.length) return;
+  $("gallery").innerHTML = imgs.map(i => `<a href="/api/files?f=${encodeURIComponent(i.file)}" download title="${esc(i.file)}"><img loading="lazy" src="/api/files?f=${encodeURIComponent(i.file)}&view=1">${esc(i.file.split(/[\\/]/).slice(-2).join(" / "))}</a>`).join("");
+}
+
+// ---------- Rádio ----------
+const sdr = new SdrPanel($("sdr"), {
+  tool: "Satélites", step: 1000,
+  presets: [{ label: "Meteor-M LRPT 137,900", freq: 137.9e6, mode: "iq", bw: 150000, rate: 1024000 }, { label: "ISS voz/SSTV 145,800", freq: 145.8e6, mode: "nfm", bw: 15000 },
+    { label: "ISS APRS 145,825", freq: 145.825e6, mode: "nfm" }, { label: "NOAA 19 137,100 (APT)", freq: 137.1e6, mode: "wfm", bw: 40000 }],
+  onEvent: ev => { log.add(ev); if (ev.type === "sat") { load(); gallery(); } },
+});
+
+await load(); satdump(); gallery();
+// sintoniza o Meteor ao abrir, a menos que uma passagem esteja sendo gravada
+setTimeout(() => { if (!info.recording) sdr.applyPreset({ freq: 137.9e6, mode: "iq", bw: 150000, rate: 1024000 }); }, 600);
+setInterval(() => { if (globe.follow && globe.follow !== "obs") centerView(); globe.draw(); }, 1000);
+setInterval(() => { computeTracks(); renderTable(); }, 30000);
+setInterval(() => load(), 5 * 60000);
+</script>
+</body></html>
