@@ -15,6 +15,7 @@ import * as sys from "./lib/system.mjs";
 import * as net from "./lib/network.mjs";
 import * as sensors from "./lib/sensors.mjs";
 import * as video from "./lib/video.mjs";
+import * as wintools from "./lib/wintools.mjs";
 
 const PORT = Number(process.env.TOOLBOX_PORT) || 3098;
 const HOST = "127.0.0.1";
@@ -155,6 +156,20 @@ app.post("/api/convert", upload.single("file"), (req, res) => {
     .then(out => { job.files.push(path.relative(OUTPUT, out)); finishJob(job); }, err => finishJob(job, err))
     .finally(() => fs.rm(req.file.path, () => {}));
   res.json({ id: job.id });
+});
+
+// ---------- Ferramentas do Windows ----------
+app.get("/api/windows/actions", (req, res) => res.json({
+  windows: IS_WIN, actions: Object.entries(wintools.ACTIONS).map(([id, a]) => ({ id, label: a.label })),
+}));
+app.post("/api/windows/run", (req, res) => {
+  try { res.json({ ok: true, label: wintools.runAction(String(req.body?.id || "")) }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.get("/api/windows/update-log", (req, res) => res.json({ log: wintools.readLog(), path: wintools.UPDATE_LOG }));
+// irm http://localhost:3098/win/update.ps1 | iex  -> baixa o script completo daqui e roda como administrador
+app.get("/win/update.ps1", (req, res) => {
+  res.type("text/plain; charset=utf-8").send(wintools.bootstrap(`http://localhost:${PORT}`));
 });
 
 // ---------- Editor de vídeo ----------
