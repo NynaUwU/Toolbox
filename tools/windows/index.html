@@ -5,8 +5,6 @@
 <style>
   .cmd { display: flex; gap: 4px; align-items: center; margin-top: 6px; }
   .cmd input { flex: 1; font-family: "Courier New", monospace; font-size: 12px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px; }
-  .grid button { text-align: left; padding: 4px 8px; }
   #log { max-height: 260px; min-height: 80px; overflow: auto; white-space: pre-wrap; font-family: "Courier New", monospace; font-size: 11px; background: #000; color: #c0c0c0; padding: 6px; }
   #script { max-height: 300px; overflow: auto; white-space: pre; font-family: "Courier New", monospace; font-size: 11px; background: #fff; padding: 6px; }
   ul { margin: 4px 0 6px 18px; padding: 0; }
@@ -47,31 +45,16 @@
   </details>
 </fieldset>
 
-<fieldset>
-  <legend>⚙️ Configurações do Windows</legend>
-  <div class="grid" id="gSettings"></div>
-</fieldset>
-<fieldset>
-  <legend>🛠️ Ferramentas do sistema</legend>
-  <div class="grid" id="gSystem"></div>
-</fieldset>
 <p id="msg" class="muted"></p>
 
 <script type="module">
 import { api, post } from "/assets/jobs98.js";
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const ICON = { "settings-update": "🔄", "settings-activation": "🔑", "settings-apps": "📦", "settings-startup": "🚀", "settings-storage": "💽",
-  "settings-display": "🖥️", "settings-network": "🌐", "settings-sound": "🔊", control: "🗂️", devmgmt: "🧩", services: "⚙️", diskmgmt: "💾",
-  eventvwr: "📋", taskschd: "⏰", msconfig: "🧰", regedit: "🗝️", cleanmgr: "🧹", sysinfo: "ℹ️", ncpa: "🔌", power: "🔋", sysprops: "🏷️", terminal: "⌨️" };
-
 $("irmCmd").value = `irm ${location.origin}/win/update.ps1 | iex`;
 
-const { windows, actions } = await api("/api/windows/actions");
+const { windows } = await api("/api/windows/actions");
 $("notWin").hidden = windows;
-const btn = a => `<button data-run="${a.id}">${ICON[a.id] || "•"} ${esc(a.label)}</button>`;
-$("gSettings").innerHTML = actions.filter(a => a.id.startsWith("settings-")).map(btn).join("");
-$("gSystem").innerHTML = actions.filter(a => !a.id.startsWith("settings-") && !["winutil", "update"].includes(a.id)).map(btn).join("");
 
 document.addEventListener("click", async e => {
   const run = e.target.closest("[data-run]");

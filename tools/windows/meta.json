@@ -1,6 +1,6 @@
 {
   "title": "Ferramentas do Windows",
-  "description": "WinUtil, atualização forçada do Windows (seu script) e atalhos para as telas de configuração do sistema.",
+  "description": "WinUtil e atualização forçada do Windows (seu script). Rodam no PC onde a Toolbox está instalada.",
   "icon": "🪛",
   "category": "Sistema e rede",
   "order": 3
