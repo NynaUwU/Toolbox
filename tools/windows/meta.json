@@ -1,6 +1,6 @@
 {
   "title": "Ferramentas do Windows",
-  "description": "WinUtil e atualização forçada do Windows (seu script). Rodam no PC onde a Toolbox está instalada.",
+  "description": "Comandos para copiar e scripts para baixar: WinUtil e atualização forçada do Windows.",
   "icon": "🪛",
   "category": "Sistema e rede",
   "order": 3

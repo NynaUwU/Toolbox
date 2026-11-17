@@ -17,7 +17,7 @@ Central pessoal de ferramentas que roda **só no seu computador** (http://localh
 | 🔌 Pinagem de conectores | 42 conectores com desenho clicável e cores de fio: USB (A/C/micro/mini), HDMI, DP, VGA, DVI, RJ45/RJ11, áudio, ATX/EPS/PCIe/SATA/Molex, GPIO, ISP, SWD, OBD-II e antigos (serial, paralela, PS/2, AT, MIDI, SCART, IDE, disquete, game port, fonte AT…) | — |
 | 🔬 Simulador de circuitos | CircuitJS (Falstad, online) + calculadoras offline **com o esquema do circuito desenhado ao vivo**: Ohm, divisor, LED, código de cores, série/paralelo, RC/RL, LC, 555, bobinas | — |
 | 📊 Gerenciador de tarefas | CPU (por núcleo), memória, rede, discos, **temperaturas**, processos (finalizar), informações do PC | PowerShell / netstat; LibreHardwareMonitor portátil (opcional) |
-| 🪛 Ferramentas do Windows | WinUtil (Chris Titus), atualização forçada do Windows (script próprio, servido pela Toolbox em `/win/update.ps1`) com log ao vivo | PowerShell |
+| 🪛 Ferramentas do Windows | Comandos para copiar e arquivos para baixar: WinUtil (Chris Titus) e atualização forçada do Windows (script próprio, via GitHub ou `/win/update.ps1`). A Toolbox não executa nada | — |
 | 📡 Dispositivos na rede | IP, nome, fabricante e MAC dos aparelhos — faixa pela máscara (até /16 = 255.255.0.0) | sondagem TCP + tabela ARP do Windows |
 | 🔢 Contador de texto | Caracteres, palavras, linhas, tempo de leitura | — |
 

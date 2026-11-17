@@ -158,18 +158,11 @@ app.post("/api/convert", upload.single("file"), (req, res) => {
   res.json({ id: job.id });
 });
 
-// ---------- Ferramentas do Windows ----------
-app.get("/api/windows/actions", (req, res) => res.json({
-  windows: IS_WIN, actions: Object.entries(wintools.ACTIONS).map(([id, a]) => ({ id, label: a.label })),
-}));
-app.post("/api/windows/run", (req, res) => {
-  try { res.json({ ok: true, label: wintools.runAction(String(req.body?.id || "")) }); }
-  catch (e) { res.status(400).json({ error: e.message }); }
-});
-app.get("/api/windows/update-log", (req, res) => res.json({ log: wintools.readLog(), path: wintools.UPDATE_LOG }));
-// irm http://localhost:3098/win/update.ps1 | iex  -> baixa o script completo daqui e roda como administrador
+// ---------- Ferramentas do Windows (só comandos para copiar e arquivos para baixar) ----------
+app.get("/api/windows/info", (req, res) => res.json({ rawBase: wintools.RAW_BASE }));
+// irm <url> | iex  — versão servida pela própria Toolbox (só funciona no PC onde ela roda)
 app.get("/win/update.ps1", (req, res) => {
-  res.type("text/plain; charset=utf-8").send(wintools.bootstrap(`http://localhost:${PORT}`));
+  res.type("text/plain; charset=utf-8").send(wintools.bootstrap(`http://localhost:${PORT}/tools/windows/scripts`));
 });
 
 // ---------- Editor de vídeo ----------

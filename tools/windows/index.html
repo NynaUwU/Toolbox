@@ -3,92 +3,76 @@
 <title>Ferramentas do Windows</title>
 <link rel="stylesheet" href="/vendor/98/98.css"><link rel="stylesheet" href="/assets/tool98.css">
 <style>
-  .cmd { display: flex; gap: 4px; align-items: center; margin-top: 6px; }
+  .cmd { display: flex; gap: 4px; align-items: center; margin: 4px 0; }
   .cmd input { flex: 1; font-family: "Courier New", monospace; font-size: 12px; }
-  #log { max-height: 260px; min-height: 80px; overflow: auto; white-space: pre-wrap; font-family: "Courier New", monospace; font-size: 11px; background: #000; color: #c0c0c0; padding: 6px; }
+  .cmd label { width: 120px; flex: none; }
   #script { max-height: 300px; overflow: auto; white-space: pre; font-family: "Courier New", monospace; font-size: 11px; background: #fff; padding: 6px; }
-  ul { margin: 4px 0 6px 18px; padding: 0; }
-  .warn { background: #ffffe1; border: 1px solid #000; padding: 6px 8px; margin: 6px 0; }
+  ul, ol { margin: 4px 0 6px 18px; padding: 0; }
+  li { margin: 2px 0; }
+  .note { background: #ffffe1; border: 1px solid #000; padding: 6px 8px; margin: 6px 0; }
+  code { font-family: "Courier New", monospace; background: #fff; padding: 0 3px; }
 </style>
 </head><body class="stack">
-<p class="warn" id="notWin" hidden>⚠ Estas ferramentas só funcionam com a Toolbox rodando no Windows.</p>
+
+<fieldset>
+  <legend>Como usar os comandos</legend>
+  <ol>
+    <li>No PC que você quer configurar, abra o <b>PowerShell como administrador</b>: <code>Win + X</code> → <b>Terminal (Admin)</b> ou <b>Windows PowerShell (Admin)</b>.</li>
+    <li>Cole o comando (botão direito ou <code>Ctrl + V</code>) e aperte <b>Enter</b>.</li>
+  </ol>
+  <p class="muted"><code>irm</code> (Invoke-RestMethod) baixa o script do endereço indicado e <code>iex</code> (Invoke-Expression) o executa. Rode apenas comandos de fontes em que você confia.</p>
+</fieldset>
 
 <fieldset>
   <legend>🧰 WinUtil (Chris Titus Tech)</legend>
-  <p>Utilitário de código aberto para instalar programas em lote, aplicar ajustes de desempenho e privacidade, corrigir problemas e configurar atualizações. Baixa sempre a versão mais recente do site oficial.</p>
-  <div class="row"><button class="default" data-run="winutil">▶ Abrir WinUtil</button><span class="muted">O Windows vai pedir permissão de administrador.</span></div>
+  <p>Utilitário de código aberto com interface gráfica: instala programas em lote, aplica ajustes de desempenho e privacidade, corrige problemas comuns e configura o Windows Update. O comando sempre baixa a versão mais recente do site oficial.</p>
   <div class="cmd"><input readonly value='irm "https://christitus.com/win" | iex'><button data-copy>📋 Copiar</button></div>
 </fieldset>
 
 <fieldset>
   <legend>🔄 Atualização forçada do Windows (seu script)</legend>
   <ul>
-    <li>Instala <b>todas</b> as atualizações (Windows Update + Microsoft Update) usando o módulo PSWindowsUpdate.</li>
-    <li><b>Reinicia sozinho</b> quando necessário e continua depois do login, até não sobrar nada (máx. 15 rodadas).</li>
-    <li>Windows 10: trava na versão 22H2 e ignora o upgrade para o Windows 11. Windows 11: instala tudo normalmente.</li>
-    <li>No fim, limpa o cache de atualizações (downloads e Otimização de Entrega).</li>
+    <li>Instala <b>todas</b> as atualizações (Windows Update + Microsoft Update) com o módulo PSWindowsUpdate.</li>
+    <li><b>Reinicia sozinho</b> quando precisa e continua após o login, até não sobrar nada (máx. 15 rodadas).</li>
+    <li>Windows 10: fixa na versão 22H2 e não faz o upgrade para o 11. Windows 11: instala tudo normalmente.</li>
+    <li>No fim, limpa o cache de atualizações. Log em <code>C:\ProgramData\WinUpdateHelper\update-log.txt</code>.</li>
   </ul>
-  <p class="warn">⚠ Salve seus trabalhos antes: o PC reinicia automaticamente (30 s de aviso — para cancelar, rode <code>shutdown /a</code>).</p>
+  <p class="note">⚠ Salve seus trabalhos antes: o PC reinicia automaticamente (30 s de aviso — para cancelar, rode <code>shutdown /a</code>).</p>
+
+  <p><b>Opção 1 — comando</b> (baixa o script e o executa como administrador):</p>
+  <div class="cmd"><label>Qualquer PC:</label><input readonly id="cmdGithub"><button data-copy>📋 Copiar</button></div>
+  <div class="cmd"><label>Este PC (Toolbox):</label><input readonly id="cmdLocal"><button data-copy>📋 Copiar</button></div>
+  <p class="muted">“Qualquer PC” busca o script no GitHub da Toolbox (precisa de internet). “Este PC” busca no servidor da Toolbox e só funciona no computador onde ela está rodando.</p>
+
+  <p style="margin-top:8px"><b>Opção 2 — arquivos</b> (copie os dois para o PC e dê dois cliques no <code>.bat</code>):</p>
   <div class="row">
-    <button class="default" data-run="update">▶ Executar agora</button>
-    <a href="/tools/windows/scripts/Update-Windows.ps1" download><button type="button">⬇ Baixar .ps1</button></a>
-    <a href="/tools/windows/scripts/RUN-UPDATES.bat" download><button type="button">⬇ Baixar .bat</button></a>
+    <a href="/tools/windows/scripts/RUN-UPDATES.bat" download><button type="button">⬇ RUN-UPDATES.bat</button></a>
+    <a href="/tools/windows/scripts/Update-Windows.ps1" download><button type="button">⬇ Update-Windows.ps1</button></a>
     <button id="showScript">👁 Ver script</button>
   </div>
-  <p class="muted" style="margin-top:6px">Rodando direto do servidor da Toolbox (num PowerShell deste PC):</p>
-  <div class="cmd"><input readonly id="irmCmd"><button data-copy>📋 Copiar</button></div>
+  <div class="cmd"><label>Link do .ps1:</label><input readonly id="linkPs1"><button data-copy>📋 Copiar</button></div>
   <pre id="script" hidden></pre>
-  <details id="logBox" style="margin-top:8px">
-    <summary>📄 Log da atualização <span class="muted" id="logPath"></span></summary>
-    <div class="row" style="margin:4px 0"><button id="logRefresh">Atualizar</button><span class="muted" id="logInfo"></span></div>
-    <div id="log">—</div>
-  </details>
 </fieldset>
 
-<p id="msg" class="muted"></p>
-
 <script type="module">
-import { api, post } from "/assets/jobs98.js";
+import { api } from "/assets/jobs98.js";
 const $ = id => document.getElementById(id);
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-$("irmCmd").value = `irm ${location.origin}/win/update.ps1 | iex`;
-
-const { windows } = await api("/api/windows/actions");
-$("notWin").hidden = windows;
+const { rawBase } = await api("/api/windows/info");
+$("cmdGithub").value = `irm ${rawBase}/update.ps1 | iex`;
+$("cmdLocal").value = `irm ${location.origin}/win/update.ps1 | iex`;
+$("linkPs1").value = `${rawBase}/Update-Windows.ps1`;
 
 document.addEventListener("click", async e => {
-  const run = e.target.closest("[data-run]");
-  if (run) {
-    const id = run.dataset.run;
-    if (id === "update" && !confirm("Iniciar a atualização forçada do Windows?\n\nO PC vai reiniciar sozinho quantas vezes for preciso.")) return;
-    try { const r = await post("/api/windows/run", { id }); $("msg").textContent = `✔ Abrindo: ${r.label}`; if (id === "update") { $("logBox").open = true; pollLog(); } }
-    catch (err) { $("msg").innerHTML = `<span class="error">✖ ${esc(err.message)}</span>`; }
-    return;
-  }
   const copy = e.target.closest("[data-copy]");
-  if (copy) {
-    const input = copy.parentElement.querySelector("input");
-    try { await navigator.clipboard.writeText(input.value); copy.textContent = "✔ Copiado"; } catch { input.select(); }
-    setTimeout(() => (copy.textContent = "📋 Copiar"), 1500);
-  }
+  if (!copy) return;
+  const input = copy.parentElement.querySelector("input");
+  try { await navigator.clipboard.writeText(input.value); copy.textContent = "✔ Copiado"; } catch { input.select(); }
+  setTimeout(() => (copy.textContent = "📋 Copiar"), 1500);
 });
-
 $("showScript").onclick = async () => {
   const pre = $("script");
   if (pre.hidden && !pre.textContent) pre.textContent = await (await fetch("/tools/windows/scripts/Update-Windows.ps1")).text();
   pre.hidden = !pre.hidden;
 };
-
-async function loadLog() {
-  const { log, path } = await api("/api/windows/update-log");
-  $("logPath").textContent = `(${path})`;
-  $("log").textContent = log ?? "Ainda não há log — o script cria este arquivo quando roda.";
-  $("logInfo").textContent = `lido às ${new Date().toLocaleTimeString("pt-BR")}`;
-  $("log").scrollTop = $("log").scrollHeight;
-}
-let timer = null;
-function pollLog() { loadLog(); clearInterval(timer); timer = setInterval(() => { if ($("logBox").open && !document.hidden) loadLog(); }, 5000); }
-$("logBox").addEventListener("toggle", () => { if ($("logBox").open) pollLog(); });
-$("logRefresh").onclick = loadLog;
 </script>
 </body></html>
