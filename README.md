@@ -62,10 +62,11 @@ Para iniciar junto com o Windows: `Win + R` → `shell:startup` → cole ali um 
   Ruas, zonas residencial/comercial/industrial, parques, usina, demolir, expandir terreno, impostos e demanda RCI; a simulação roda no servidor (1 mês a cada 3 s).
   No **mapa da rede**, o roteador fica no centro e cada cidade se liga a ele por uma avenida (outras sub-redes passam por um nó próprio); ligar as ruas à entrada **AV** dá comércio com a rede.
 - **BlockVerse**: mundo 3D de blocos compartilhado por todos da rede (three.js no navegador, simulação no servidor).
-  - **Casa por IP:** área de 25×25 protegida (só o dono constrói/usa) e sem Shades; bordas desenhadas no chão.
+  - **Mundo de todos:** qualquer um constrói em qualquer lugar; todos nascem no mesmo ponto (tecla H volta para lá).
   - **Sobrevivência:** vida, fome (comer recupera), dano de queda; **modo criativo** opcional (voo, itens infinitos).
   - **Criaturas:** Capybara e Chicken (pacíficas, dão carne), **Shade** (hostil à noite, queima de dia).
-  - **Crafting:** 35 receitas (mão e bancada), ferramentas de madeira/pedra/ferro, fornalha com combustível.
+  - **Crafting em grade:** 2×2 no inventário (E) e 3×3 na bancada; a receita depende do formato (vale espelhada). Inventário com cursor: esquerdo pega/solta/junta pilhas, direito pega metade/solta 1, Shift+clique move rápido. O 📖 livro de receitas mostra o formato e coloca os ingredientes na grade.
+  - Itens iguais empilham até 64 (ferramentas não empilham). Ferramentas de madeira/pedra/ferro, fornalha com espaço de entrada, combustível e saída.
   - **Plantação:** enxada → terra arada; trigo e cenoura em 8 estágios (mais rápido com água por perto); pão; mudas viram árvores.
   - **Energia:** Power Cable (sinal cai 1 por bloco), Power Core, Lever, Button, Lamp, Inverter (inverte o sinal de baixo) e Door automática.
   - Dia/noite de 10 min, luz de tochas/lâmpadas, chat no jogo. Mundo salvo em `data\blockverse`.

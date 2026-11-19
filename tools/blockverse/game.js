@@ -189,7 +189,7 @@ function remesh(c) {
 
 // ======================= Rede =======================
 let ws = null, me = null, myKey = null, inv = Array(36).fill(null), stat = { hp: 20, food: 20, creative: false, dead: false };
-let homes = [], worldTime = 0, timeAt = 0, sel = 0, openUI = null, furnaceState = null;
+let worldTime = 0, timeAt = 0, sel = 0, openUI = null;
 const others = new Map(), mobs = new Map();
 const requested = new Set();
 function connect() {
@@ -211,7 +211,7 @@ function onChunk(buf) {
 function onMsg(m) {
   switch (m.type) {
     case "welcome":
-      myKey = m.id; homes = m.homes; worldTime = m.time; timeAt = performance.now();
+      myKey = m.id; worldTime = m.time; timeAt = performance.now();
       if (!me) me = { x: m.p.x, y: m.p.y, z: m.p.z, vx: 0, vy: 0, vz: 0, yaw: m.p.yaw, pitch: m.p.pitch, onGround: false, fallStart: m.p.y, fly: false };
       $("nameIn").value = $("name2").value = m.name; store.set("bv-name", m.name);
       if ($("creativeIn").checked !== undefined) sendJ({ type: "mode", creative: $("creativeIn").checked });
@@ -231,10 +231,10 @@ function onMsg(m) {
     case "tp": if (me) { me.x = m.x; me.y = m.y; me.z = m.z; me.vx = me.vy = me.vz = 0; me.fallStart = me.y; } break;
     case "msg": toast(m.text); break;
     case "chat": chatLine(m.from, m.text); break;
-    case "homes": homes = m.homes; homeLinesAt = 0; break;
     case "kicked": toast("Você abriu o jogo em outra aba."); break;
-    case "open": openPanel(m.ui, m.pos, m.f); break;
-    case "furnace": furnaceState = m.f; if (openUI?.ui === "furnace") drawFurnace(); break;
+    case "open": openPanel(m.ui); break;
+    case "ui": ui = m; if (openUI) drawInv(); break;
+    case "furnace": ui.f = m.f; if (openUI?.ui === "furnace") drawFurnace(); break;
     case "tick":
       worldTime = m.time; timeAt = performance.now();
       if (m.sets) for (const [x, y, z, id, meta] of m.sets) setLocal(x, y, z, id, meta);
@@ -354,7 +354,7 @@ document.addEventListener("keydown", e => {
   if (!locked) return;
   keys[e.code] = true;
   if (e.code.startsWith("Digit") && e.code !== "Digit0") { sel = +e.code.slice(5) - 1; selChanged(); }
-  if (e.code === "KeyE") openPanel("inventory");
+  if (e.code === "KeyE") { sendJ({ type: "openinv" }); ui = { cursor: null, grid: [], size: 2, result: null, f: null }; openPanel("inventory"); }
   if (e.code === "KeyT" || e.key === "Enter") { e.preventDefault(); openChat(); }
   if (e.code === "KeyH") sendJ({ type: "home" });
   if (e.code === "KeyF" && stat.creative) { me.fly = !me.fly; toast(me.fly ? "Voo ligado" : "Voo desligado"); }
@@ -528,115 +528,96 @@ function drawBars() {
   $("food").textContent = stat.creative ? "" : "🍗".repeat(Math.ceil(stat.food / 2)) + "·".repeat(10 - Math.ceil(stat.food / 2));
 }
 
-// ---------- Inventário / crafting / fornalha ----------
-let pick = -1;
-function openPanel(ui, pos, f) {
-  openUI = { ui, pos }; furnaceState = f || null; pick = -1;
+// ---------- Inventário / crafting (grade estilo cursor) / fornalha ----------
+let ui = { cursor: null, grid: [], size: 2, result: null, f: null };
+function openPanel(kind) {
+  openUI = { ui: kind };
   document.exitPointerLock?.();
   $("pause").hidden = true; $("inv").hidden = false;
-  $("invTitle").textContent = ui === "workbench" ? "BANCADA" : ui === "furnace" ? "FORNALHA" : "INVENTÁRIO";
-  $("furnBox").hidden = ui !== "furnace";
-  showTab("craft"); drawInv();
+  $("invTitle").textContent = kind === "workbench" ? "BANCADA" : kind === "furnace" ? "FORNALHA" : "INVENTÁRIO";
+  $("craftBox").hidden = kind === "furnace"; $("furnBox").hidden = kind !== "furnace";
+  showTab("book"); drawInv();
 }
 function closePanel(silent) {
   if (!openUI) return;
-  if (openUI.ui === "furnace") sendJ({ type: "close" });
-  openUI = null; $("inv").hidden = true; $("tip").style.display = "none";
+  sendJ({ type: "close" });
+  openUI = null; ui.cursor = null; $("inv").hidden = true; $("tip").style.display = "none"; $("cursor").hidden = true;
   if (!silent) lock();
 }
 function showTab(t) {
-  $("tabCraft").classList.toggle("on", t === "craft"); $("tabCreative").classList.toggle("on", t === "creative");
-  $("recipes").hidden = t !== "craft"; $("palette").hidden = t !== "creative";
+  $("tabBook").classList.toggle("on", t === "book"); $("tabCreative").classList.toggle("on", t === "creative");
+  $("recipes").hidden = t !== "book"; $("palette").hidden = t !== "creative";
+  if (t === "creative") drawPalette();
 }
-$("tabCraft").onclick = () => showTab("craft");
-$("tabCreative").onclick = () => { showTab("creative"); drawPalette(); };
-function invSlot(i) {
-  const el = slotEl(inv[i], pick === i ? "pick" : i === sel ? "sel" : "");
-  el.onmousedown = e => {
-    e.preventDefault();
-    if (openUI?.ui === "furnace" && inv[i] && pick < 0) { sendJ({ type: "furnace", slot: i, to: e.button === 2 ? "fuel" : "in" }); return; }
-    if (e.button === 2) { sendJ({ type: "split", a: i }); return; }
-    if (pick < 0) { if (inv[i]) pick = i; }
-    else { if (pick !== i) sendJ({ type: "swap", a: pick, b: i }); pick = -1; }
-    drawInv();
-  };
+$("tabBook").onclick = () => showTab("book");
+$("tabCreative").onclick = () => showTab("creative");
+/** Um espaço clicável: esquerdo pega/solta/junta, direito pega metade/solta 1, Shift move rápido. */
+function clickable(el, slot) {
+  el.onmousedown = e => { e.preventDefault(); sendJ({ type: "click", slot, button: e.button, shift: e.shiftKey }); };
   return el;
 }
 function drawInv() {
   if (!openUI) return;
-  $("invGrid").replaceChildren(...Array.from({ length: 27 }, (_, k) => invSlot(k + 9)));
-  $("invHot").replaceChildren(...Array.from({ length: 9 }, (_, k) => invSlot(k)));
-  drawRecipes(); if (openUI.ui === "furnace") drawFurnace();
+  $("invGrid").replaceChildren(...Array.from({ length: 27 }, (_, k) => clickable(slotEl(inv[k + 9]), k + 9)));
+  $("invHot").replaceChildren(...Array.from({ length: 9 }, (_, k) => clickable(slotEl(inv[k], k === sel ? "sel" : ""), k)));
+  const g = $("cgrid"); g.style.gridTemplateColumns = `repeat(${ui.size}, 44px)`;
+  g.replaceChildren(...Array.from({ length: ui.size ** 2 }, (_, i) => clickable(slotEl(ui.grid[i]), `g${i}`)));
+  $("cout").replaceChildren(clickable(slotEl(ui.result, ui.result ? "ready" : ""), "out"));
+  if (openUI.ui === "furnace") drawFurnace();
+  drawRecipes(); drawCursor();
 }
-$("trash").onmousedown = () => { if (pick >= 0) { sendJ({ type: "trash", a: pick }); pick = -1; } };
-const count = id => inv.reduce((a, s) => a + (s && s[0] === id ? s[1] : 0), 0);
+let mouseXY = [0, 0];
+function drawCursor() {
+  const c = $("cursor");
+  if (!openUI || !ui.cursor) { c.hidden = true; return; }
+  c.hidden = false; c.replaceChildren(...[...slotEl(ui.cursor).childNodes]);
+  c.style.left = `${mouseXY[0] - 22}px`; c.style.top = `${mouseXY[1] - 22}px`;
+}
+$("trash").onmousedown = e => { e.preventDefault(); sendJ({ type: "click", slot: "trash" }); };
+const count = id => inv.reduce((a, s) => a + (s && s[0] === id ? s[1] : 0), 0) + ui.grid.reduce((a, s) => a + (s && s[0] === id ? s[1] : 0), 0);
+function miniIcon(id, size = 16) { const i = new Image(); i.src = iconURL(id, atlasCanvas); i.width = i.height = size; i.title = itemName(id); return i; }
 function drawRecipes() {
-  const where = openUI.ui === "workbench" ? ["hand", "workbench"] : ["hand"];
-  const list = RECIPES.map((r, i) => ({ ...r, i })).filter(r => where.includes(r.where) || (openUI.ui !== "workbench" && r.where === "workbench"));
-  const can = r => where.includes(r.where) && (stat.creative || r.need.every(([id, n]) => count(id) >= n));
-  list.sort((a, b) => can(b) - can(a));
+  const big = ui.size === 3;
+  const list = RECIPES.map((r, i) => ({ ...r, i })).filter(r => r.shape);
+  const fits = r => r.w <= ui.size && r.h <= ui.size;
+  const has = r => r.need.every(([id, n]) => count(id) >= n);
+  list.sort((a, b) => (fits(b) && has(b)) - (fits(a) && has(a)));
   const els = list.map(r => {
-    const d = document.createElement("div"); d.className = `rec ${can(r) ? "" : "no"}`;
-    const im = new Image(); im.src = iconURL(r.out[0], atlasCanvas);
+    const ok = fits(r) && has(r), d = document.createElement("div"); d.className = `rec ${ok ? "" : "no"}`;
     const name = document.createElement("span"); name.textContent = `${itemName(r.out[0])}${r.out[1] > 1 ? ` ×${r.out[1]}` : ""}`;
-    const need = document.createElement("div"); need.className = "need";
-    if (r.where === "workbench" && !where.includes("workbench")) { const s = document.createElement("span"); s.textContent = "bancada"; need.append(s); }
-    for (const [id, n] of r.need) { const i2 = new Image(); i2.src = iconURL(id, atlasCanvas); i2.title = itemName(id); const s = document.createElement("span"); s.textContent = `${n}`; need.append(i2, s); }
-    d.append(im, name, need);
-    d.title = "Clique: fazer 1 · Shift+clique: fazer o máximo";
-    if (can(r)) d.onclick = e => sendJ({ type: "craft", r: r.i, max: e.shiftKey, pos: openUI.pos });
+    const pat = document.createElement("div"); pat.className = "pat"; pat.style.gridTemplateColumns = `repeat(${r.w}, 16px)`;
+    for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) { const ch = r.shape[y][x] ?? " "; const cell = document.createElement("i"); if (ch !== " ") cell.append(miniIcon(r.key[ch])); pat.append(cell); }
+    const tag = document.createElement("small"); tag.className = "where"; tag.textContent = !fits(r) ? "3×3 bancada" : !has(r) ? "faltam itens" : "";
+    d.append(miniIcon(r.out[0], 24), name, tag, pat);
+    d.title = ok ? "Clique para colocar os ingredientes na grade" : !fits(r) ? "Precisa da bancada (grade 3×3)" : "Você não tem todos os ingredientes";
+    if (ok) d.onclick = () => sendJ({ type: "fill", r: r.i });
     return d;
   });
-  $("recipes").replaceChildren(...els);
+  const h = document.createElement("h3"); h.textContent = "Fornalha (fundição)";
+  const furn = RECIPES.filter(r => r.where === "furnace").map(r => { const d = document.createElement("div"); d.className = "rec no2"; const t = document.createElement("span"); t.textContent = `${itemName(r.need[0][0])} → ${itemName(r.out[0])}`; d.append(miniIcon(r.need[0][0], 24), t, miniIcon(r.out[0], 24)); return d; });
+  $("recipes").replaceChildren(...els, h, ...furn);
+  void big;
 }
 function drawPalette() {
   const ids = [...BLOCKS.filter(b => placeable(b.id)).map(b => b.id), ...Object.values(ITEM).filter(i => i.item).map(i => i.id)];
-  $("palette").replaceChildren(...ids.map(id => { const el = slotEl([id, 1]); el.onclick = () => sendJ({ type: "give", id }); return el; }));
+  $("palette").replaceChildren(...ids.map(id => { const el = slotEl([id, 1]); el.onmousedown = e => { e.preventDefault(); sendJ({ type: "give", id }); }; return el; }));
 }
 function drawFurnace() {
-  const f = furnaceState || {};
-  for (const k of ["in", "fuel", "out"]) {
-    const host = document.querySelector(`#furn [data-f="${k}"]`), el = slotEl(f[k]);
-    host.replaceChildren(...[...el.childNodes]); host.dataset.tip = el.dataset.tip || "";
-    host.onclick = () => sendJ({ type: "furnace", take: k });
+  const f = ui.f || {};
+  for (const [k, slot] of [["in", "fin"], ["fuel", "ffuel"], ["out", "fout"]]) {
+    const host = document.querySelector(`#furn [data-f="${k}"]`);
+    host.replaceChildren(clickable(slotEl(f[k]), slot));
   }
   $("furnProg").firstChild.style.width = `${Math.min(100, (f.prog || 0) / 5 * 100)}%`;
   $("furnFlame").classList.toggle("on", f.burn > 0);
 }
 document.addEventListener("mousemove", e => {
+  mouseXY = [e.clientX, e.clientY];
+  if (openUI && ui.cursor) { $("cursor").style.left = `${e.clientX - 22}px`; $("cursor").style.top = `${e.clientY - 22}px`; }
   const t = e.target.closest?.("[data-tip]"), tip = $("tip");
-  if (!openUI || !t || !t.dataset.tip) { tip.style.display = "none"; return; }
+  if (!openUI || ui.cursor || !t || !t.dataset.tip) { tip.style.display = "none"; return; }
   tip.textContent = t.dataset.tip; tip.style.display = "block"; tip.style.left = `${e.clientX + 14}px`; tip.style.top = `${e.clientY + 10}px`;
 });
-
-// ======================= Casas (bordas no chão) =======================
-let homeLines = null, homeLinesAt = 0;
-function topYLocal(x, z) { for (let y = H - 1; y > 0; y--) { const id = getB(x, y, z); if (id > 0 && BLOCKS[id].solid) return y + 1; } return null; }
-function rebuildHomeLines() {
-  if (homeLines) { scene.remove(homeLines); homeLines.geometry.dispose(); homeLines = null; }
-  const pos = [], col = [];
-  for (const h of homes) {
-    if (Math.hypot(h.x - me.x, h.z - me.z) > 120) continue;
-    const mine = h.owner === myKey, c = mine ? [0.25, 0.94, 1] : [1, 0.25, 0.85];
-    const ring = [];
-    for (let i = -h.r; i <= h.r + 1; i++) ring.push([h.x + i, h.z - h.r]);
-    for (let i = -h.r; i <= h.r + 1; i++) ring.push([h.x + h.r + 1, h.z + i]);
-    for (let i = h.r + 1; i >= -h.r; i--) ring.push([h.x + i, h.z + h.r + 1]);
-    for (let i = h.r + 1; i >= -h.r; i--) ring.push([h.x - h.r, h.z + i]);
-    for (let i = 0; i < ring.length - 1; i++) {
-      const [x0, z0] = ring[i], [x1, z1] = ring[i + 1], y0 = topYLocal(x0, z0), y1 = topYLocal(x1, z1);
-      if (y0 == null || y1 == null) continue;
-      pos.push(x0, y0 + 0.05, z0, x1, y1 + 0.05, z1); col.push(...c, ...c);
-      if (i % 4 === 0) { pos.push(x0, y0, z0, x0, y0 + 1.2, z0); col.push(...c, ...c); }
-    }
-  }
-  if (!pos.length) return;
-  const g = new THREE.BufferGeometry();
-  g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
-  homeLines = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.8 }));
-  scene.add(homeLines);
-}
-const homeAt = (x, z) => homes.find(h => Math.abs(Math.floor(x) - h.x) <= h.r && Math.abs(Math.floor(z) - h.z) <= h.r);
 
 // ======================= Laço =======================
 const skyDay = new THREE.Color(0x87c6ff), skyNight = new THREE.Color(0x070b1e), skyDusk = new THREE.Color(0xff8a5a), tmp = new THREE.Color();
@@ -653,7 +634,6 @@ function loop(now) {
     posT -= dt;
     if (posT <= 0) { posT = 0.1; sendJ({ type: "pos", x: +me.x.toFixed(3), y: +me.y.toFixed(3), z: +me.z.toFixed(3), yaw: +me.yaw.toFixed(3), pitch: +me.pitch.toFixed(3), sprint: me.sprint }); }
     chunkT -= dt; if (chunkT <= 0) { chunkT = 0.25; manageChunks(); }
-    if (now - homeLinesAt > 4000) { homeLinesAt = now; rebuildHomeLines(); }
   }
   // meshes pendentes: os mais próximos primeiro, poucos por quadro
   if (dirty.size && me) {
@@ -689,8 +669,6 @@ function drawInfo(t) {
   const hh = String(Math.floor(hours)).padStart(2, "0"), mm = String(Math.floor((hours % 1) * 60)).padStart(2, "0");
   const hit = locked ? raycast() : null;
   $("info").innerHTML = `<b>BlockVerse</b> · ${fps} fps<br>XYZ ${me.x.toFixed(1)} / ${me.y.toFixed(1)} / ${me.z.toFixed(1)}<br>🕒 ${hh}:${mm} ${daylight(t) < 0.25 ? "🌙 noite (Shades!)" : "☀"}<br>👥 ${others.size + 1} na rede · 🐾 ${mobs.size}` + (hit ? `<br>🎯 ${itemName(hit.id)}${BLOCKS[hit.id].crop ? ` (${Math.min(8, getM(hit.x, hit.y, hit.z) + 1)}/8)` : ""}${hit.id === 21 ? ` · energia ${getM(hit.x, hit.y, hit.z)}` : ""}` : "");
-  const h = homeAt(me.x, me.z), area = $("area");
-  area.hidden = !h; if (h) area.textContent = h.owner === myKey ? "🏠 Sua casa (protegida)" : `🏠 Casa de ${h.name} — só visita`;
 }
 function manageChunks() {
   const pcx = Math.floor(me.x / CS), pcz = Math.floor(me.z / CS), R = viewDist();

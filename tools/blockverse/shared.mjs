@@ -11,41 +11,41 @@ export const ckey = (cx, cz) => `${cx},${cz}`;
 
 // ---------- Blocos ----------
 // shape: cube | cross (plantas) | slab (cabo) | small (alavanca/botão/tocha) | door
-// solid: colide · opaque: esconde faces vizinhas · hard: segundos para quebrar com a mão · tool: ferramenta ideal
-const B = (id, name, o) => ({ id, name, shape: "cube", solid: true, opaque: true, hard: 1, tool: null, ...o });
+// solid: colide · opaque: esconde faces vizinhas · hard: segundos para quebrar com a mão · best: ferramenta ideal
+const B = (id, name, o) => ({ id, name, shape: "cube", solid: true, opaque: true, hard: 1, best: null, ...o });
 export const BLOCKS = [
   B(0, "Air", { solid: false, opaque: false, hard: 0 }),
-  B(1, "Grass", { hard: 0.6, tool: "pa", drop: 2 }),
-  B(2, "Dirt", { hard: 0.6, tool: "pa" }),
-  B(3, "Stone", { hard: 3, tool: "picareta", needTool: 1, drop: 9 }),
-  B(4, "Sand", { hard: 0.6, tool: "pa" }),
+  B(1, "Grass", { hard: 0.6, best: "pa", drop: 2 }),
+  B(2, "Dirt", { hard: 0.6, best: "pa" }),
+  B(3, "Stone", { hard: 3, best: "picareta", needTool: 1, drop: 9 }),
+  B(4, "Sand", { hard: 0.6, best: "pa" }),
   B(5, "Water", { solid: false, opaque: false, hard: -1, liquid: true }),
-  B(6, "Log", { hard: 1.6, tool: "machado" }),
+  B(6, "Log", { hard: 1.6, best: "machado" }),
   B(7, "Leaves", { opaque: false, hard: 0.3, cutout: true, drop: "folhas" }),
-  B(8, "Planks", { hard: 1.4, tool: "machado" }),
-  B(9, "Cobblestone", { hard: 3, tool: "picareta", needTool: 1 }),
+  B(8, "Planks", { hard: 1.4, best: "machado" }),
+  B(9, "Cobblestone", { hard: 3, best: "picareta", needTool: 1 }),
   B(10, "Glass", { opaque: false, hard: 0.4, cutout: true, drop: 0 }),
-  B(11, "Coal Ore", { hard: 3.5, tool: "picareta", needTool: 1, drop: 101 }),
-  B(12, "Iron Ore", { hard: 4, tool: "picareta", needTool: 2 }),
-  B(13, "Voltite Ore", { hard: 4, tool: "picareta", needTool: 2, drop: 103, dropN: [2, 4], glow: true }),
-  B(14, "Workbench", { hard: 1.6, tool: "machado", use: "workbench" }),
-  B(15, "Furnace", { hard: 3, tool: "picareta", needTool: 1, use: "furnace" }),
+  B(11, "Coal Ore", { hard: 3.5, best: "picareta", needTool: 1, drop: 101 }),
+  B(12, "Iron Ore", { hard: 4, best: "picareta", needTool: 2 }),
+  B(13, "Voltite Ore", { hard: 4, best: "picareta", needTool: 2, drop: 103, dropN: [2, 4], glow: true }),
+  B(14, "Workbench", { hard: 1.6, best: "machado", use: "workbench" }),
+  B(15, "Furnace", { hard: 3, best: "picareta", needTool: 1, use: "furnace" }),
   B(16, "Torch", { shape: "small", solid: false, opaque: false, hard: 0.05, glow: true }),
-  B(17, "Farmland", { hard: 0.6, tool: "pa", drop: 2 }),
+  B(17, "Farmland", { hard: 0.6, best: "pa", drop: 2 }),
   B(18, "Wheat Crop", { shape: "cross", solid: false, opaque: false, hard: 0.05, crop: 105, stages: 8, drop: "trigo" }),
   B(19, "Carrot Crop", { shape: "cross", solid: false, opaque: false, hard: 0.05, crop: 106, stages: 8, drop: "cenoura" }),
   B(20, "Sapling", { shape: "cross", solid: false, opaque: false, hard: 0.05, sapling: true }),
   B(21, "Power Cable", { shape: "slab", solid: false, opaque: false, hard: 0.05, energy: "cable" }),
-  B(22, "Power Core", { hard: 2, tool: "picareta", energy: "core", glow: true }),
+  B(22, "Power Core", { hard: 2, best: "picareta", energy: "core", glow: true }),
   B(23, "Lever", { shape: "small", solid: false, opaque: false, hard: 0.3, energy: "lever", use: "lever" }),
   B(24, "Button", { shape: "small", solid: false, opaque: false, hard: 0.3, energy: "button", use: "button" }),
   B(25, "Lamp", { hard: 0.6, opaque: true, energy: "lamp" }),
-  B(26, "Inverter", { hard: 1, tool: "picareta", energy: "inverter" }),
-  B(27, "Door", { shape: "door", hard: 1.5, tool: "machado", energy: "door", use: "door", opaque: false }),
+  B(26, "Inverter", { hard: 1, best: "picareta", energy: "inverter" }),
+  B(27, "Door", { shape: "door", hard: 1.5, best: "machado", energy: "door", use: "door", opaque: false }),
   B(28, "Bedrock", { hard: -1 }),
   B(29, "Tall Grass", { shape: "cross", solid: false, opaque: false, hard: 0.02, drop: "graminha", replaceable: true }),
   B(30, "Flower", { shape: "cross", solid: false, opaque: false, hard: 0.02 }),
-  B(31, "Bricks", { hard: 3, tool: "picareta", needTool: 1 }),
+  B(31, "Bricks", { hard: 3, best: "picareta", needTool: 1 }),
 ];
 export const AIR = 0, WATER = 5;
 export const isSolid = id => BLOCKS[id]?.solid ?? false;
@@ -70,7 +70,7 @@ export const MAX_STACK = 64;
 export function digTime(blockId, toolId) {
   const b = BLOCKS[blockId]; if (!b || b.hard < 0) return Infinity;
   const t = ITEM[toolId];
-  const ok = t?.tool && t.tool === b.tool;
+  const ok = t?.item && t.tool && t.tool === b.best;
   return b.hard / (ok ? [1, 2, 4, 6][t.level] : 1);
 }
 /** O que cai ao quebrar (retorna lista [id, qtd]). */
@@ -87,24 +87,59 @@ export function drops(blockId, meta, toolId, rnd = Math.random) {
   return [[b.drop ?? blockId, n]];
 }
 
-// ---------- Receitas ----------
-// where: "hand" (inventário), "workbench" (perto de uma bancada), "furnace". need: [[id, qtd], …] · out: [id, qtd]
-const R = (where, out, need) => ({ where, out, need });
-const toolsOf = (mat, matName, lvlBase) => [
-  R("workbench", [120 + lvlBase, 1], [[mat, 3], [100, 2]]), R("workbench", [125 + lvlBase, 1], [[mat, 3], [100, 2]]),
-  R("workbench", [130 + lvlBase, 1], [[mat, 1], [100, 2]]), R("workbench", [135 + lvlBase, 1], [[mat, 2], [100, 1]]),
-  R("workbench", [140 + lvlBase, 1], [[mat, 2], [100, 2]]),
-];
+// ---------- Receitas (com formato, como na grade de crafting) ----------
+// shape: linhas da grade (espaço = vazio) · key: letra -> id · out: [id, qtd]
+// Receitas de até 2×2 cabem na grade do inventário; as de 3 linhas/colunas precisam da bancada.
+// Toda receita vale também espelhada na horizontal. "furnace" = fundição (1 item -> resultado).
+const S = (out, shape, key) => ({ where: "grid", out, shape, key });
+const TOOL_SHAPES = { 120: ["MMM", " S ", " S "], 125: ["MM", "MS", " S"], 130: ["M", "S", "S"], 135: ["M", "M", "S"], 140: ["MM", " S", " S"] };
+const toolsOf = (mat, lvl) => Object.entries(TOOL_SHAPES).map(([base, shape]) => S([+base + lvl, 1], shape, { M: mat, S: 100 }));
+const F = (out, input) => ({ where: "furnace", out, need: [[input, 1]] });
 export const RECIPES = [
-  R("hand", [8, 4], [[6, 1]]), R("hand", [100, 4], [[8, 2]]), R("hand", [14, 1], [[8, 4]]), R("hand", [16, 4], [[101, 1], [100, 1]]),
-  R("hand", [21, 8], [[103, 1]]),
-  ...toolsOf(8, "madeira", 0), ...toolsOf(9, "pedra", 1), ...toolsOf(102, "ferro", 2),
-  R("workbench", [15, 1], [[9, 8]]), R("workbench", [107, 1], [[104, 3]]), R("workbench", [27, 1], [[8, 6]]),
-  R("workbench", [22, 1], [[103, 9]]), R("workbench", [23, 1], [[100, 1], [9, 1]]), R("workbench", [24, 1], [[9, 1], [103, 1]]),
-  R("workbench", [25, 1], [[103, 4], [10, 1]]), R("workbench", [26, 1], [[103, 2], [100, 1], [9, 1]]), R("workbench", [31, 4], [[111, 4]]),
-  R("furnace", [10, 1], [[4, 1]]), R("furnace", [102, 1], [[12, 1]]), R("furnace", [109, 1], [[108, 1]]),
-  R("furnace", [3, 1], [[9, 1]]), R("furnace", [101, 1], [[6, 1]]), R("furnace", [111, 1], [[2, 1]]),
+  S([8, 4], ["L"], { L: 6 }),
+  S([100, 4], ["P", "P"], { P: 8 }),
+  S([14, 1], ["PP", "PP"], { P: 8 }),
+  S([16, 4], ["C", "S"], { C: 101, S: 100 }),
+  S([21, 8], ["V"], { V: 103 }),
+  ...toolsOf(8, 0), ...toolsOf(9, 1), ...toolsOf(102, 2),
+  S([15, 1], ["CCC", "C C", "CCC"], { C: 9 }),
+  S([107, 1], ["WWW"], { W: 104 }),
+  S([27, 1], ["PP", "PP", "PP"], { P: 8 }),
+  S([22, 1], ["VVV", "VVV", "VVV"], { V: 103 }),
+  S([23, 1], ["S", "C"], { S: 100, C: 9 }),
+  S([24, 1], ["V", "C"], { V: 103, C: 9 }),
+  S([25, 1], [" V ", "VGV", " V "], { V: 103, G: 10 }),
+  S([26, 1], [" V ", "VSV", "CCC"], { V: 103, S: 100, C: 9 }),
+  S([31, 4], ["KK", "KK"], { K: 111 }),
+  S([9, 4], ["SS", "SS"], { S: 3 }),
+  F([10, 1], 4), F([102, 1], 12), F([109, 1], 108), F([3, 1], 9), F([101, 1], 6), F([111, 1], 2),
 ];
+for (const r of RECIPES) if (r.shape) { // lista de ingredientes (para o livro de receitas)
+  const n = {}; for (const row of r.shape) for (const ch of row) if (ch !== " ") n[r.key[ch]] = (n[r.key[ch]] || 0) + 1;
+  r.need = Object.entries(n).map(([id, q]) => [+id, q]);
+  r.w = Math.max(...r.shape.map(x => x.length)); r.h = r.shape.length;
+}
+
+/** Procura a receita que a grade (size 2 ou 3, array de ids ou 0) forma. Retorna a receita ou null. */
+export function matchGrid(ids, size) {
+  let x0 = size, y0 = size, x1 = -1, y1 = -1;
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (ids[y * size + x]) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
+  if (x1 < 0) return null;
+  const w = x1 - x0 + 1, h = y1 - y0 + 1;
+  const at = (x, y) => ids[(y0 + y) * size + x0 + x] || 0;
+  for (const r of RECIPES) {
+    if (!r.shape || r.w !== w || r.h !== h) continue;
+    for (const mirror of [false, true]) {
+      let ok = true;
+      for (let y = 0; y < h && ok; y++) for (let x = 0; x < w && ok; x++) {
+        const ch = (r.shape[y][mirror ? w - 1 - x : x] ?? " ");
+        if ((ch === " " ? 0 : r.key[ch]) !== at(x, y)) ok = false;
+      }
+      if (ok) return r;
+    }
+  }
+  return null;
+}
 export const FUEL = { 101: 8, 8: 2, 6: 2, 100: 1 }; // unidades: cada fundição gasta 1
 
 // ---------- Ruído simplex 2D (determinístico) ----------
@@ -165,9 +200,5 @@ export function generateChunk(cx, cz) {
   return { blocks, meta };
 }
 
-/** Faixa de casa de cada IP (terreno protegido): em anel em volta do centro, como no NetCyties. */
-export function homeFor(ip) {
-  const parts = String(ip).split(".").map(Number), last = parts[3] ?? 0;
-  const ang = (last / 256) * Math.PI * 2, r = 96;
-  return { x: Math.round(Math.cos(ang) * r), z: Math.round(Math.sin(ang) * r), r: 12 };
-}
+/** Ponto de nascimento do mundo (igual para todos). */
+export const WORLD_SPAWN = { x: 8, z: 8 };

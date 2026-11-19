@@ -58,10 +58,17 @@
   .rec { display: flex; align-items: center; gap: 6px; padding: 3px 5px; border: 1px solid var(--line); background: #0a1220; cursor: pointer; }
   .rec.no { opacity: .38; cursor: default; }
   .rec:not(.no):hover { border-color: var(--neon); }
-  .rec img { width: 24px; height: 24px; image-rendering: pixelated; }
-  .rec .need { margin-left: auto; display: flex; gap: 4px; align-items: center; color: var(--dim); }
-  .rec .need img { width: 16px; height: 16px; }
-  .rec .need span { font-size: 11px; margin-right: 2px; }
+  .rec img { image-rendering: pixelated; }
+  .rec .where { color: var(--dim); margin-left: auto; font-size: 10px; }
+  .rec .pat { display: grid; gap: 1px; margin-left: 6px; }
+  .rec .pat i { width: 16px; height: 16px; background: #050912; display: block; }
+  .rec.no2 { cursor: default; gap: 8px; }
+  .craft { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+  .cgrid { display: grid; gap: 2px; }
+  .cgrid .slot, #cout .slot, #furn .slot { pointer-events: auto; cursor: pointer; }
+  .arrow { font-size: 22px; color: var(--dim); }
+  #cout .slot { width: 52px; height: 52px; } #cout .slot.ready { border-color: var(--neon); box-shadow: 0 0 8px rgba(63,240,255,.5); }
+  #cursor { position: fixed; z-index: 10; pointer-events: none; background: transparent; border-color: transparent; }
   .tabs { display: flex; gap: 4px; margin-bottom: 6px; }
   .tabs button.on { border-color: var(--neon); color: var(--neon); }
   #palette { display: grid; grid-template-columns: repeat(9, 44px); gap: 2px; max-height: 60vh; overflow-y: auto; }
@@ -76,7 +83,6 @@
 <canvas id="game"></canvas>
 <div class="hud" id="cross"></div>
 <div class="hud" id="info"></div>
-<div class="hud" id="area" hidden></div>
 <div class="hud" id="dig"><i></i></div>
 <div class="hud" id="toast"></div>
 <div class="hud" id="chatlog"></div>
@@ -92,7 +98,7 @@
 <div class="overlay" id="start">
   <div class="win" style="width:520px">
     <h2>🧱 BLOCKVERSE</h2>
-    <p>Mundo de blocos compartilhado por todos os aparelhos da rede. A área em volta da sua <b>casa</b> (cada IP tem a sua) é protegida: só você constrói lá, e Shades não nascem nela.</p>
+    <p>Mundo de blocos compartilhado por todos os aparelhos da rede. O mundo é de todos: qualquer um constrói em qualquer lugar.</p>
     <div class="row"><label>Seu nome <input type="text" id="nameIn" maxlength="20"></label><span id="conn" class="muted">conectando…</span></div>
     <div class="row"><button class="big" id="play" disabled>▶ Jogar</button>
       <label><input type="checkbox" id="creativeIn"> Modo criativo (voa, blocos infinitos, sem dano)</label></div>
@@ -101,10 +107,10 @@
       <b>W A S D</b><span>andar · <b>Shift</b> correr (no voo: descer) · <b>Espaço</b> pular/nadar · <b>F</b> voar (criativo)</span>
       <b>Mouse esq.</b><span>quebrar (segure) / atacar criatura</span>
       <b>Mouse dir.</b><span>colocar bloco · usar (bancada, fornalha, alavanca, botão, porta) · comer · arar com enxada · plantar</span>
-      <b>1–9 / roda</b><span>escolher item · <b>E</b> inventário e crafting · <b>T</b> chat · <b>H</b> voltar para casa · <b>Esc</b> pausa</span>
+      <b>1–9 / roda</b><span>escolher item · <b>E</b> inventário e crafting · <b>T</b> chat · <b>H</b> voltar ao ponto inicial · <b>Esc</b> pausa</span>
     </div>
     <h3>Dicas</h3>
-    <p class="muted">Tronco → tábuas → gravetos e bancada. Na bancada: ferramentas, fornalha, porta. Enxada em grama/terra faz terra arada; plante sementes (da grama alta) ou cenouras; crescem mais rápido com água a até 4 blocos. Energia: Voltite Dust faz cabos; Power Core, alavanca e botão ligam lâmpadas e portas; o inversor emite energia quando o bloco embaixo dele <i>não</i> está energizado.</p>
+    <p class="muted">Crafting em grade: 2×2 no inventário (E), 3×3 na bancada. O 📖 livro de receitas mostra o formato e coloca os ingredientes na grade com um clique. Tronco → tábuas → gravetos e bancada (4 tábuas em quadrado). Enxada em grama/terra faz terra arada; plante sementes (da grama alta) ou cenouras; crescem mais rápido com água a até 4 blocos. Energia: Voltite Dust faz cabos; Power Core, alavanca e botão ligam lâmpadas e portas; o inversor emite energia quando o bloco embaixo dele <i>não</i> está energizado.</p>
   </div>
 </div>
 
@@ -115,13 +121,13 @@
     <div class="row"><label><input type="checkbox" id="creative2"> Modo criativo</label></div>
     <div class="row"><label>Distância de visão <input type="range" id="dist2" min="2" max="8" value="4"></label></div>
     <div class="row"><label>Nome <input type="text" id="name2" maxlength="20"></label><button id="saveName">OK</button></div>
-    <div class="row"><button id="goHome">🏠 Voltar para casa</button></div>
+    <div class="row"><button id="goHome">🏠 Voltar ao ponto inicial</button></div>
   </div>
 </div>
 
 <div class="overlay" id="dead" hidden>
   <div class="win" style="text-align:center"><h2 style="color:var(--bad);text-shadow:0 0 8px var(--bad)">VOCÊ MORREU</h2>
-    <p class="muted">Seus itens continuam com você.</p><div class="row" style="justify-content:center"><button class="big" id="respawn">Renascer em casa</button></div></div>
+    <p class="muted">Seus itens continuam com você.</p><div class="row" style="justify-content:center"><button class="big" id="respawn">Renascer</button></div></div>
 </div>
 
 <div class="overlay" id="inv" hidden>
@@ -129,25 +135,29 @@
     <h2 id="invTitle">INVENTÁRIO</h2>
     <div class="cols">
       <div>
-        <div id="furnBox" hidden>
-          <div id="furn">
-            <div><div class="slot" data-f="in" title="Item a fundir (clique com o botão esquerdo num item do inventário)"></div><div style="height:4px"></div><div class="slot" data-f="fuel" title="Combustível (clique com o botão direito num item do inventário)"></div></div>
-            <span id="furnFlame">🔥</span><div id="furnProg"><i></i></div><div class="slot" data-f="out" title="Resultado (clique para pegar)"></div>
-          </div>
-          <p class="muted">Esq. num item: fundir · Dir.: usar como combustível</p>
+        <div id="craftBox"><h3>Crafting</h3>
+          <div class="craft"><div class="cgrid" id="cgrid"></div><span class="arrow">➜</span><div id="cout"></div></div>
         </div>
+        <div id="furnBox" hidden><h3>Fornalha</h3>
+          <div id="furn">
+            <div><div data-f="in" title="Item a fundir"></div><div style="height:4px"></div><div data-f="fuel" title="Combustível"></div></div>
+            <span id="furnFlame">🔥</span><div id="furnProg"><i></i></div><div data-f="out" title="Resultado"></div>
+          </div>
+        </div>
+        <h3>Inventário</h3>
         <div class="grid9" id="invGrid"></div>
         <div class="grid9 hotrow" id="invHot"></div>
-        <div class="row"><span class="muted">Clique para pegar e clique em outro espaço para trocar · Dir.: dividir pilha</span><div class="slot" id="trash" title="Jogar fora o item escolhido">🗑 lixo</div></div>
+        <div class="row"><span class="muted">Esq.: pegar/soltar/juntar · Dir.: pegar metade/soltar 1 · Shift+clique: mover rápido</span><div class="slot" id="trash" title="Solte aqui para jogar fora">🗑 lixo</div></div>
       </div>
       <div>
-        <div class="tabs"><button id="tabCraft" class="on">⚒ Crafting</button><button id="tabCreative" hidden>✨ Criativo</button></div>
+        <div class="tabs"><button id="tabBook" class="on">📖 Receitas</button><button id="tabCreative" hidden>✨ Criativo</button></div>
         <div id="recipes"></div>
         <div id="palette" hidden></div>
       </div>
     </div>
   </div>
 </div>
+<div class="slot" id="cursor" hidden></div>
 <div id="tip"></div>
 
 <script type="module" src="game.js"></script>
