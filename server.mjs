@@ -22,6 +22,7 @@ import * as sdrInstall from "./lib/sdr/install.mjs";
 import * as sats from "./lib/sdr/sat.mjs";
 import * as clock from "./lib/clock.mjs";
 import { attachChat } from "./lib/chat.mjs";
+import { attachBlockverse } from "./lib/blockverse.mjs";
 import * as cities from "./lib/cities.mjs";
 
 const PORT = Number(process.env.TOOLBOX_PORT) || 3098;
@@ -409,5 +410,6 @@ httpServer.on("upgrade", (req, socket, head) => {
   if (!access.allowUpgrade(req)) { socket.destroy(); return; }
   if (req.url.startsWith("/ws/sdr")) wss.handleUpgrade(req, socket, head, ws => hub.attach(ws, req));
   else if (req.url.startsWith("/ws/chat")) chatWss.handleUpgrade(req, socket, head, ws => attachChat(ws, req));
+  else if (req.url.startsWith("/ws/blockverse")) chatWss.handleUpgrade(req, socket, head, ws => attachBlockverse(ws, req));
   else socket.destroy();
 });

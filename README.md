@@ -55,12 +55,20 @@ Para iniciar junto com o Windows: `Win + R` → `shell:startup` → cole ali um 
 - **Modo demonstração:** sem dongle, um simulador gera sinais de teste (FM, aviação, APRS, DTMF, controle 433, ADS-B, satélite, TV, WWV).
 - Gravações: `Output\Rádio` (áudio), `Output\SDR\IQ`, `Output\SDR\Capturas`, `Output\SDR\Logs`, `Output\Satélites`.
 
-## Modo jogo e NetCyties
+## Modo jogo, NetCyties e BlockVerse
 
 - Botão **🎮 Modo jogo** no topo: tema escuro hi-tech e a barra lateral passa a mostrar só os jogos (🧰 volta às ferramentas).
 - **NetCyties**: city builder isométrico — cada aparelho da rede (cada IP) é dono de uma cidade e só ele pode construir nela; as outras podem ser visitadas.
   Ruas, zonas residencial/comercial/industrial, parques, usina, demolir, expandir terreno, impostos e demanda RCI; a simulação roda no servidor (1 mês a cada 3 s).
   No **mapa da rede**, o roteador fica no centro e cada cidade se liga a ele por uma avenida (outras sub-redes passam por um nó próprio); ligar as ruas à entrada **AV** dá comércio com a rede.
+- **BlockVerse**: mundo 3D de blocos compartilhado por todos da rede (three.js no navegador, simulação no servidor).
+  - **Casa por IP:** área de 25×25 protegida (só o dono constrói/usa) e sem Shades; bordas desenhadas no chão.
+  - **Sobrevivência:** vida, fome (comer recupera), dano de queda; **modo criativo** opcional (voo, itens infinitos).
+  - **Criaturas:** Capybara e Chicken (pacíficas, dão carne), **Shade** (hostil à noite, queima de dia).
+  - **Crafting:** 35 receitas (mão e bancada), ferramentas de madeira/pedra/ferro, fornalha com combustível.
+  - **Plantação:** enxada → terra arada; trigo e cenoura em 8 estágios (mais rápido com água por perto); pão; mudas viram árvores.
+  - **Energia:** Power Cable (sinal cai 1 por bloco), Power Core, Lever, Button, Lamp, Inverter (inverte o sinal de baixo) e Door automática.
+  - Dia/noite de 10 min, luz de tochas/lâmpadas, chat no jogo. Mundo salvo em `data\blockverse`.
 
 ## Chat
 
