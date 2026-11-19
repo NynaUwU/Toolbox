@@ -1,21 +1,25 @@
-// BlockVerse — cliente 3D (three.js). O servidor é a autoridade; aqui ficam render, física do jogador e interface.
+// BlockVerse — cliente 3D (three.js). O servidor é a autoridade; aqui ficam render, física do jogador e interface (estilo Windows 98).
 import * as THREE from "/vendor/three.module.min.js";
-import { CS, H, REACH, idx, ckey, BLOCKS, ITEM, AIR, WATER, RECIPES, FUEL, digTime, itemName, placeable, daylight } from "./shared.mjs";
+import { CS, H, REACH, DAY_MS, idx, ckey, BLOCKS, ITEM, AIR, WATER, LAVA, RECIPES, digTime, itemName, placeable, daylight } from "./shared.mjs";
 import { buildAtlas, faceTiles, iconURL, ATLAS_COLS, ATLAS_ROWS } from "./textures.js";
+import { hudIcon } from "./sprites.js";
 
 const $ = id => document.getElementById(id);
 const store = { get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 
 // ======================= Render =======================
-const canvas = $("game");
+const canvas = $("game"), viewport = $("viewport");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, 1, 0.08, 400);
+const camera = new THREE.PerspectiveCamera(+store.get("bv-fov", "75"), 1, 0.08, 400);
 camera.rotation.order = "YXZ";
 scene.add(camera);
-function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
-addEventListener("resize", resize); resize();
+function resize() {
+  const w = Math.max(1, canvas.clientWidth), h = Math.max(1, canvas.clientHeight);
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(canvas); resize();
 
 const atlasCanvas = buildAtlas();
 const atlas = new THREE.CanvasTexture(atlasCanvas);
@@ -62,12 +66,28 @@ function setLocal(x, y, z, id, meta) {
   if (lx < 8) dirty.add(ckey(cx - 1, cz)); if (lx > 7) dirty.add(ckey(cx + 1, cz));
   if (lz < 8) dirty.add(ckey(cx, cz - 1)); if (lz > 7) dirty.add(ckey(cx, cz + 1));
 }
-const solidAt = (x, y, z) => { const id = getB(x, y, z); if (id < 0) return true; if (id === 27) return !(getM(x, y, z) & 1); return BLOCKS[id].solid; };
+/** Altura sólida do bloco na célula (0 = atravessável). Chunk ainda não carregado conta como sólido. */
+function solidH(x, y, z) {
+  const id = getB(x, y, z); if (id < 0) return 1;
+  if (id === 27) return getM(x, y, z) & 1 ? 0 : 1;
+  const b = BLOCKS[id]; return b.solid ? (b.ch ?? 1) : 0;
+}
+const isLiq = id => id === WATER || id === LAVA;
 
-const lightOf = (id, m) => id === 16 ? 14 : id === 25 ? (m & 1 ? 15 : 0) : id === 22 ? 12 : id === 13 ? 6 : id === 15 ? (m & 1 ? 13 : 0) : id === 26 ? (m & 1 ? 7 : 0) : id === 21 ? (m > 0 ? 3 : 0) : 0;
+const lightOf = (id, m) => id === 16 ? 14 : id === 25 ? (m & 1 ? 15 : 0) : id === 22 ? 12 : id === 13 ? 6 : id === 15 ? (m & 1 ? 13 : 0)
+  : id === 26 ? (m & 1 ? 7 : 0) : id === 21 ? (m > 0 ? 3 : 0) : id === 44 ? 15 : id === 51 ? 15 : 0;
 
 // ---------- Malha de um chunk (com luz do céu + luz de blocos por BFS) ----------
 const RX = CS + 16; // região: chunk ± 8 blocos
+const FACES = [ // +X, -X, +Z, -Z, +Y, -Y (cantos: inf.-esq., inf.-dir., sup.-dir., sup.-esq. vistos de fora)
+  { n: [1, 0, 0], c: [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], shade: 0.8 },
+  { n: [-1, 0, 0], c: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]], shade: 0.8 },
+  { n: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], shade: 0.65 },
+  { n: [0, 0, -1], c: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]], shade: 0.65 },
+  { n: [0, 1, 0], c: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]], shade: 1 },
+  { n: [0, -1, 0], c: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], shade: 0.5 },
+];
+const SIDE_OF_FACING = [2, 0, 3, 1];
 function buildChunk(c) {
   const ox = c.cx * CS - 8, oz = c.cz * CS - 8, N = RX * RX * H;
   const blk = new Uint8Array(N), met = new Uint8Array(N), sky = new Uint8Array(N), bl = new Uint8Array(N);
@@ -79,10 +99,9 @@ function buildChunk(c) {
     for (let y = 0; y < H; y++) { const i = idx(lx, y, lz), r = R(rx, y, rz); blk[r] = cc.blocks[i]; met[r] = cc.meta[i]; }
   }
   const q = new Int32Array(N); let qh = 0, qt = 0;
-  // céu: desce pela coluna até o primeiro bloco opaco (água escurece um pouco)
   for (let rz = 0; rz < RX; rz++) for (let rx = 0; rx < RX; rx++) {
     let lv = 15;
-    for (let y = H - 1; y >= 0; y--) { const r = R(rx, y, rz), id = blk[r]; if (BLOCKS[id].opaque) break; if (id === WATER || id === 7) lv = Math.max(0, lv - 2); sky[r] = lv; if (lv > 1) q[qt++] = r; }
+    for (let y = H - 1; y >= 0; y--) { const r = R(rx, y, rz), id = blk[r]; if (BLOCKS[id].opaque) break; if (id === WATER || id === 7 || id === 39 || id === 41 || id === 34) lv = Math.max(0, lv - 2); sky[r] = lv; if (lv > 1) q[qt++] = r; }
   }
   const spread = arr => {
     while (qh < qt) {
@@ -104,45 +123,47 @@ function buildChunk(c) {
     const b = BLOCKS[id], m = met[r], wx = c.cx * CS + lx, wz = c.cz * CS + lz;
     const tiles = faceTiles(id, m), glow = lightOf(id, m) / 15 || (b.glow ? 0.8 : 0);
     const L = rr => [sky[rr] / 15, Math.max(bl[rr] / 15, glow)];
-    if (b.shape === "cube" || id === WATER) {
-      const g = id === WATER ? out.water : out.solid;
-      const front = tiles[3] !== undefined ? ((m >> 2) & 3) : -1;
+    const facing = (m >> 2) & 3;
+    if (b.shape === "cube") {
+      const liquid = isLiq(id), g = id === WATER || b.translucent ? out.water : out.solid;
+      const front = tiles[3] !== undefined ? facing : -1;
       for (let f = 0; f < 6; f++) {
         const [dx, dy, dz] = FACES[f].n, ny = y + dy;
         let nid;
-        if (ny < 0) continue; else if (ny >= H) nid = AIR; else { const nr = R(rx + dx, ny, rz + dz); nid = blk[nr]; }
-        if (id === WATER ? (nid === WATER || isOp(nid)) : (isOp(nid) || (nid === id && !b.opaque))) continue;
+        if (ny < 0) continue; else if (ny >= H) nid = AIR; else nid = blk[R(rx + dx, ny, rz + dz)];
+        if (liquid ? (nid === id || isOp(nid)) : (isOp(nid) || (nid === id && !b.opaque))) continue;
         const nr = ny >= H ? r : R(rx + dx, ny, rz + dz);
         const tile = f === 4 ? tiles[0] : f === 5 ? tiles[1] : (front >= 0 && SIDE_OF_FACING[front] === f ? tiles[3] : tiles[2]);
-        const top = id === WATER && (y + 1 >= H || blk[R(rx, y + 1, rz)] !== WATER) ? 0.88 : 1;
-        addFace(g, f, wx, y, wz, tile, FACES[f].shade, L(nr), [1, 1, 1], top);
+        const top = liquid && (y + 1 >= H || blk[R(rx, y + 1, rz)] !== id) ? 0.88 : 1;
+        addFace(g, f, wx, y, wz, tile, FACES[f].shade, id === LAVA ? [1, 1] : L(nr), [1, 1, 1], top);
       }
       continue;
     }
-    const lt = L(r);
-    if (b.shape === "cross") { addCross(out.solid, wx, y, wz, tiles[2], lt); continue; }
-    if (id === 21) { const p = m / 15; addBox(out.solid, wx, y, wz, 0, 0, 0, 1, 1 / 16, 1, tiles[0], [lt[0], Math.max(lt[1], p * 0.6)], [0.55 + p * 0.45, 0.55 + p * 0.2, 0.6 + p * 0.4]); continue; }
-    if (id === 16) { addBox(out.solid, wx, y, wz, 7 / 16, 0, 7 / 16, 9 / 16, 10 / 16, 9 / 16, tiles[0], [lt[0], 1], [1, 1, 1]); continue; }
-    if (id === 23) { addBox(out.solid, wx, y, wz, 5 / 16, 0, 5 / 16, 11 / 16, 2 / 16, 11 / 16, tiles[0], lt, [0.7, 0.7, 0.72]); const o = m & 1 ? 2 / 16 : -2 / 16; addBox(out.solid, wx, y, wz, 7 / 16 + o, 2 / 16, 7 / 16, 9 / 16 + o, 10 / 16, 9 / 16, tiles[0], lt, m & 1 ? [1, 0.45, 0.45] : [0.75, 0.5, 0.35]); continue; }
-    if (id === 24) { const h = m & 1 ? 1 / 16 : 2.5 / 16; addBox(out.solid, wx, y, wz, 5 / 16, 0, 5 / 16, 11 / 16, h, 11 / 16, tiles[0], lt, m & 1 ? [0.6, 1, 1] : [1, 1, 1]); continue; }
-    if (id === 27) {
-      const face = ((m >> 2) & 3) + (m & 1 ? 1 : 0), t = 3 / 16;
-      const boxes = [[0, 0, 0, 1, 1, t], [1 - t, 0, 0, 1, 1, 1], [0, 0, 1 - t, 1, 1, 1], [0, 0, 0, t, 1, 1]];
-      addBox(out.solid, wx, y, wz, ...boxes[face % 4], tiles[0], lt, [1, 1, 1]); continue;
+    const lt = L(r), S = out.solid;
+    switch (b.shape) {
+      case "cross": addCross(S, wx, y, wz, tiles[2], lt); break;
+      case "slab": { const p = m / 15; addBox(S, wx, y, wz, 0, 0, 0, 1, 1 / 16, 1, tiles, [lt[0], Math.max(lt[1], p * 0.6)], [0.55 + p * 0.45, 0.55 + p * 0.2, 0.6 + p * 0.4]); break; }
+      case "cactus": addBox(S, wx, y, wz, 1 / 16, 0, 1 / 16, 15 / 16, 1, 15 / 16, tiles, lt, [1, 1, 1]); break;
+      case "chest": addBox(S, wx, y, wz, 1 / 16, 0, 1 / 16, 15 / 16, 14 / 16, 15 / 16, tiles, lt, [1, 1, 1], facing); break;
+      case "bed": addBox(S, wx, y, wz, 0, 0, 0, 1, 9 / 16, 1, tiles, lt, [1, 1, 1]); break;
+      case "ladder": {
+        const t = 1 / 16, boxes = [[0, 0, 0, t, 1, 1], [1 - t, 0, 0, 1, 1, 1], [0, 0, 0, 1, 1, t], [0, 0, 1 - t, 1, 1, 1]];
+        addBox(S, wx, y, wz, ...boxes[facing], [tiles[0], tiles[0], tiles[0]], lt, [1, 1, 1]); break;
+      }
+      case "small":
+        if (id === 16) addBox(S, wx, y, wz, 7 / 16, 0, 7 / 16, 9 / 16, 10 / 16, 9 / 16, tiles, [lt[0], 1], [1, 1, 1]);
+        else if (id === 23) { addBox(S, wx, y, wz, 5 / 16, 0, 5 / 16, 11 / 16, 2 / 16, 11 / 16, tiles, lt, [0.7, 0.7, 0.72]); const o = m & 1 ? 2 / 16 : -2 / 16; addBox(S, wx, y, wz, 7 / 16 + o, 2 / 16, 7 / 16, 9 / 16 + o, 10 / 16, 9 / 16, tiles, lt, m & 1 ? [1, 0.45, 0.45] : [0.75, 0.5, 0.35]); }
+        else if (id === 24) { const h = m & 1 ? 1 / 16 : 2.5 / 16; addBox(S, wx, y, wz, 5 / 16, 0, 5 / 16, 11 / 16, h, 11 / 16, tiles, lt, m & 1 ? [0.6, 1, 1] : [1, 1, 1]); }
+        break;
+      case "door": {
+        const face = facing + (m & 1 ? 1 : 0), t = 3 / 16;
+        const boxes = [[0, 0, 0, 1, 1, t], [1 - t, 0, 0, 1, 1, 1], [0, 0, 1 - t, 1, 1, 1], [0, 0, 0, t, 1, 1]];
+        addBox(S, wx, y, wz, ...boxes[face % 4], tiles, lt, [1, 1, 1]); break;
+      }
     }
   }
   return out;
 }
-// faces: +X, -X, +Z, -Z, +Y, -Y (cantos: inf.-esq., inf.-dir., sup.-dir., sup.-esq. vistos de fora)
-const FACES = [
-  { n: [1, 0, 0], c: [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], shade: 0.8 },
-  { n: [-1, 0, 0], c: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]], shade: 0.8 },
-  { n: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], shade: 0.65 },
-  { n: [0, 0, -1], c: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]], shade: 0.65 },
-  { n: [0, 1, 0], c: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]], shade: 1 },
-  { n: [0, -1, 0], c: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], shade: 0.5 },
-];
-const SIDE_OF_FACING = [2, 0, 3, 1];
 const newGeo = () => ({ pos: [], uv: [], col: [], light: [], idx: [] });
 function tileUV(t) {
   const u0 = (t % ATLAS_COLS) / ATLAS_COLS, v1 = 1 - Math.floor(t / ATLAS_COLS) / ATLAS_ROWS, e = 0.0004;
@@ -158,10 +179,13 @@ function addFace(g, f, x, y, z, tile, shade, lt, tint, top = 1) {
   const pts = FACES[f].c.map(([a, b, c]) => [x + a, y + (b ? top : 0), z + c]);
   pushQuad(g, pts, tile, shade, lt, tint, f < 4 ? top : 1);
 }
-function addBox(g, x, y, z, x0, y0, z0, x1, y1, z1, tile, lt, tint) {
+/** Caixa com texturas [topo, base, lados, frente?]; "facing" escolhe qual lado recebe a frente. */
+function addBox(g, x, y, z, x0, y0, z0, x1, y1, z1, tiles, lt, tint, facing = -1) {
+  const t = Array.isArray(tiles) ? tiles : [tiles, tiles, tiles];
   for (let f = 0; f < 6; f++) {
     const pts = FACES[f].c.map(([a, b, c]) => [x + (a ? x1 : x0), y + (b ? y1 : y0), z + (c ? z1 : z0)]);
-    pushQuad(g, pts, tile, FACES[f].shade, lt, tint);
+    const tile = f === 4 ? t[0] : f === 5 ? t[1] : (facing >= 0 && t[3] !== undefined && SIDE_OF_FACING[facing] === f ? t[3] : t[2]);
+    pushQuad(g, pts, tile, FACES[f].shade, lt, tint, f < 4 ? (y1 - y0) : 1);
   }
 }
 function addCross(g, x, y, z, tile, lt) {
@@ -188,15 +212,16 @@ function remesh(c) {
 }
 
 // ======================= Rede =======================
-let ws = null, me = null, myKey = null, inv = Array(36).fill(null), stat = { hp: 20, food: 20, creative: false, dead: false };
-let worldTime = 0, timeAt = 0, sel = 0, openUI = null;
-const others = new Map(), mobs = new Map();
+let ws = null, me = null, myKey = null, inv = Array(36).fill(null), stat = { hp: 20, food: 20, air: 15, creative: false, dead: false };
+let worldTime = 0, timeAt = 0, sel = 0, openUI = null, started = false;
+let ui = { cursor: null, grid: [], size: 2, result: null, f: null, chest: null };
+const others = new Map(), mobs = new Map(), arrows = new Map();
 const requested = new Set();
 function connect() {
   ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/blockverse`);
   ws.binaryType = "arraybuffer";
-  ws.onopen = () => { $("conn").textContent = "conectado"; $("play").disabled = false; if (started) hello(); };
-  ws.onclose = () => { $("conn").textContent = "desconectado — tentando de novo…"; $("play").disabled = true; requested.clear(); setTimeout(connect, 2000); };
+  ws.onopen = () => { $("conn").textContent = "Conectado. Pronto para jogar."; $("play").disabled = false; if (started) hello(); };
+  ws.onclose = () => { $("conn").textContent = "Sem conexão com o servidor — tentando de novo…"; $("play").disabled = true; requested.clear(); setTimeout(connect, 2000); };
   ws.onmessage = e => typeof e.data === "string" ? onMsg(JSON.parse(e.data)) : onChunk(e.data);
 }
 const sendJ = o => { if (ws?.readyState === 1) ws.send(JSON.stringify(o)); };
@@ -214,15 +239,18 @@ function onMsg(m) {
       myKey = m.id; worldTime = m.time; timeAt = performance.now();
       if (!me) me = { x: m.p.x, y: m.p.y, z: m.p.z, vx: 0, vy: 0, vz: 0, yaw: m.p.yaw, pitch: m.p.pitch, onGround: false, fallStart: m.p.y, fly: false };
       $("nameIn").value = $("name2").value = m.name; store.set("bv-name", m.name);
-      if ($("creativeIn").checked !== undefined) sendJ({ type: "mode", creative: $("creativeIn").checked });
+      $("appTitle").textContent = `BlockVerse — ${m.name}`;
+      sendJ({ type: "mode", creative: $("creativeIn").checked });
       break;
     case "inv": inv = m.inv; drawHotbar(); if (openUI) drawInv(); break;
     case "stat": {
       const wasCreative = stat.creative; stat = m; drawBars();
       $("creative2").checked = $("creativeIn").checked = m.creative;
+      $("mCreative").classList.toggle("check", m.creative);
       $("tabCreative").hidden = !m.creative;
       if (!m.creative && me) me.fly = false;
-      $("dead").hidden = !m.dead; if (m.dead) document.exitPointerLock?.();
+      $("dead").hidden = !m.dead; $("deadWhy").textContent = m.dead ? `Causa: ${m.why || "desconhecida"}` : "";
+      if (m.dead) { document.exitPointerLock?.(); closePanel(true); hideDialogs(); }
       if (wasCreative !== m.creative && openUI) drawInv();
       break;
     }
@@ -240,17 +268,19 @@ function onMsg(m) {
       if (m.sets) for (const [x, y, z, id, meta] of m.sets) setLocal(x, y, z, id, meta);
       syncEntities(others, m.players, r => ({ key: r[0], name: r[1], x: r[2], y: r[3], z: r[4], yaw: r[5], pitch: r[6] }), makePlayerModel);
       syncEntities(mobs, m.mobs, r => ({ key: r[0], type: r[1], x: r[2], y: r[3], z: r[4], yaw: r[5], hurt: r[6] }), makeMobModel);
+      syncEntities(arrows, m.arrows, r => ({ key: r[0], x: r[1], y: r[2], z: r[3], vx: r[4], vy: r[5], vz: r[6] }), makeArrowModel);
       break;
   }
 }
 
-// ======================= Modelos (jogadores e criaturas) =======================
+// ======================= Modelos (jogadores, criaturas, flechas) =======================
 const lambert = c => new THREE.MeshLambertMaterial({ color: c });
 function boxPart(w, h, d, color, x, y, z, parent) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), lambert(color)); m.position.set(x, y, z); parent.add(m); return m; }
 function nameTag(text) {
   const cv = document.createElement("canvas"), g = cv.getContext("2d"); cv.width = 256; cv.height = 48;
-  g.font = "bold 26px Segoe UI, sans-serif"; const w = Math.min(250, g.measureText(text).width + 16);
-  g.fillStyle = "rgba(0,0,0,.55)"; g.fillRect((256 - w) / 2, 4, w, 40); g.fillStyle = "#fff"; g.textAlign = "center"; g.fillText(text, 128, 34);
+  g.font = "bold 24px Tahoma, Arial, sans-serif"; const w = Math.min(250, g.measureText(text).width + 16);
+  g.fillStyle = "#ffffe1"; g.fillRect((256 - w) / 2, 6, w, 36); g.strokeStyle = "#000"; g.lineWidth = 2; g.strokeRect((256 - w) / 2, 6, w, 36);
+  g.fillStyle = "#000"; g.textAlign = "center"; g.fillText(text, 128, 33);
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false })); s.scale.set(2, 0.375, 1); s.renderOrder = 5; return s;
 }
 function makePlayerModel(e) {
@@ -265,22 +295,38 @@ function makePlayerModel(e) {
   const tag = nameTag(e.name); tag.position.y = 2.2; g.add(tag);
   return g;
 }
-const MOB_SIZE = { capybara: [0.9, 0.9], chicken: [0.5, 0.7], shade: [0.6, 1.9] };
+const MOB_SIZE = { capybara: [0.9, 0.9], chicken: [0.5, 0.7], sheep: [0.9, 1.2], shade: [0.6, 1.9], crawler: [1.1, 0.6] };
 function makeMobModel(e) {
-  const g = new THREE.Group();
+  const g = new THREE.Group(), legs = [];
+  const eye = c => new THREE.MeshBasicMaterial({ color: c });
   if (e.type === "capybara") {
     boxPart(0.7, 0.55, 1.1, 0x8a5e3a, 0, 0.55, 0, g); boxPart(0.5, 0.45, 0.45, 0x7a5232, 0, 0.75, 0.7, g); boxPart(0.42, 0.2, 0.15, 0x3a2414, 0, 0.68, 0.95, g);
-    for (const [x, z] of [[-0.25, -0.4], [0.25, -0.4], [-0.25, 0.4], [0.25, 0.4]]) boxPart(0.16, 0.3, 0.16, 0x6a4428, x, 0.15, z, g);
+    for (const [x, z] of [[-0.25, -0.4], [0.25, -0.4], [-0.25, 0.4], [0.25, 0.4]]) legs.push(boxPart(0.16, 0.3, 0.16, 0x6a4428, x, 0.15, z, g));
   } else if (e.type === "chicken") {
     boxPart(0.4, 0.4, 0.5, 0xf4f4f0, 0, 0.45, 0, g); boxPart(0.25, 0.3, 0.25, 0xf4f4f0, 0, 0.75, 0.25, g); boxPart(0.12, 0.08, 0.12, 0xf0a020, 0, 0.72, 0.43, g); boxPart(0.08, 0.12, 0.08, 0xd02020, 0, 0.92, 0.25, g);
-    boxPart(0.06, 0.25, 0.06, 0xf0a020, -0.1, 0.12, 0, g); boxPart(0.06, 0.25, 0.06, 0xf0a020, 0.1, 0.12, 0, g);
-  } else {
-    const dark = 0x241a3a; boxPart(0.5, 0.75, 0.3, dark, 0, 1.1, 0, g); boxPart(0.48, 0.75, 0.28, 0x1a1228, 0, 0.38, 0, g);
+    legs.push(boxPart(0.06, 0.25, 0.06, 0xf0a020, -0.1, 0.12, 0, g), boxPart(0.06, 0.25, 0.06, 0xf0a020, 0.1, 0.12, 0, g));
+  } else if (e.type === "sheep") {
+    boxPart(0.75, 0.65, 1.0, 0xeeeeee, 0, 0.75, 0, g); boxPart(0.38, 0.38, 0.38, 0x4a4a4a, 0, 0.95, 0.6, g); boxPart(0.42, 0.18, 0.2, 0xeeeeee, 0, 1.15, 0.55, g);
+    for (const [x, z] of [[-0.22, -0.35], [0.22, -0.35], [-0.22, 0.35], [0.22, 0.35]]) legs.push(boxPart(0.16, 0.45, 0.16, 0x4a4a4a, x, 0.22, z, g));
+  } else if (e.type === "crawler") {
+    boxPart(0.7, 0.4, 0.8, 0x2a1a14, 0, 0.45, -0.15, g); boxPart(0.45, 0.35, 0.4, 0x3a2418, 0, 0.45, 0.4, g);
+    for (const x of [-0.12, 0.12]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.02), eye(0xff2020)); m.position.set(x, 0.5, 0.61); g.add(m); }
+    for (const side of [-1, 1]) for (let i = 0; i < 4; i++) { const l = boxPart(0.6, 0.07, 0.07, 0x1a100c, side * 0.55, 0.4, -0.45 + i * 0.22, g); l.rotation.z = side * -0.5; legs.push(l); }
+  } else { // shade
+    const dark = 0x241a3a; boxPart(0.5, 0.75, 0.3, dark, 0, 1.1, 0, g);
+    legs.push(boxPart(0.22, 0.75, 0.26, 0x1a1228, -0.12, 0.38, 0, g), boxPart(0.22, 0.75, 0.26, 0x1a1228, 0.12, 0.38, 0, g));
     boxPart(0.18, 0.8, 0.18, dark, -0.34, 1.05, 0.25, g).rotation.x = -1.2; boxPart(0.18, 0.8, 0.18, dark, 0.34, 1.05, 0.25, g).rotation.x = -1.2;
     boxPart(0.45, 0.45, 0.45, 0x2e2248, 0, 1.7, 0, g);
-    const eye = new THREE.MeshBasicMaterial({ color: 0xff3fd8 });
-    for (const x of [-0.11, 0.11]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.02), eye); m.position.set(x, 1.74, 0.23); g.add(m); }
+    for (const x of [-0.11, 0.11]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.06, 0.02), eye(0xff3fd8)); m.position.set(x, 1.74, 0.23); g.add(m); }
   }
+  g.userData.legs = legs;
+  return g;
+}
+function makeArrowModel() {
+  const g = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.6), lambert(0xb07a40)); g.add(shaft);
+  const tip = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 0.1), lambert(0x9a9aa8)); tip.position.z = 0.33; g.add(tip);
+  const fl = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.02, 0.14), lambert(0xffffff)); fl.position.z = -0.25; g.add(fl);
   return g;
 }
 function syncEntities(map, rows, parse, make) {
@@ -288,7 +334,7 @@ function syncEntities(map, rows, parse, make) {
   for (const r of rows || []) {
     const e = parse(r); seen.add(e.key);
     let o = map.get(e.key);
-    if (!o) { o = { ...e, model: make(e), rx: e.x, ry: e.y, rz: e.z, ryaw: e.yaw }; scene.add(o.model); map.set(e.key, o); }
+    if (!o) { o = { ...e, model: make(e), rx: e.x, ry: e.y, rz: e.z, ryaw: e.yaw || 0 }; scene.add(o.model); map.set(e.key, o); }
     Object.assign(o, e);
   }
   for (const [k, o] of map) if (!seen.has(k)) { scene.remove(o.model); map.delete(k); }
@@ -299,51 +345,103 @@ function animateEntities(dt, t) {
     const moving = Math.hypot(o.x - o.rx, o.z - o.rz) > 0.01;
     o.rx += (o.x - o.rx) * k; o.ry += (o.y - o.ry) * k; o.rz += (o.z - o.rz) * k;
     let dy = o.yaw - o.ryaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); o.ryaw += dy * k;
-    o.model.position.set(o.rx, o.ry + (moving && map === mobs ? Math.abs(Math.sin(t * 10)) * 0.05 : 0), o.rz);
+    o.model.position.set(o.rx, o.ry, o.rz);
     o.model.rotation.y = o.ryaw;
     if (o.model.userData.head) o.model.userData.head.rotation.x = -(o.pitch || 0);
+    const legs = o.model.userData.legs || [];
+    legs.forEach((l, i) => { if (o.type !== "crawler") l.rotation.x = moving ? Math.sin(t * 9 + (i % 2) * Math.PI) * 0.6 : 0; });
     const red = o.hurt ? 0.6 : 0;
     o.model.traverse(m => { if (m.material?.emissive) m.material.emissive.setRGB(red, 0, 0); });
+  }
+  for (const a of arrows.values()) {
+    a.rx += (a.x - a.rx) * k; a.ry += (a.y - a.ry) * k; a.rz += (a.z - a.rz) * k;
+    a.model.position.set(a.rx, a.ry, a.rz);
+    if (Math.hypot(a.vx, a.vy, a.vz) > 0.1) a.model.lookAt(a.rx + a.vx, a.ry + a.vy, a.rz + a.vz);
   }
 }
 
 // ======================= Entrada =======================
 const keys = {};
-let locked = false, started = false, mouseL = false, digTarget = null, digProg = 0, actCd = 0, lastSpace = 0;
+let locked = false, mouseL = false, digTarget = null, digProg = 0, actCd = 0, lastSpace = 0, bowStart = 0, chatOpen = false;
+let sens = +store.get("bv-sens", "25") / 10000;
 $("nameIn").value = store.get("bv-name", "");
-$("distIn").value = $("dist2").value = store.get("bv-dist", "4"); $("distV").textContent = $("distIn").value;
+const setDist = v => { $("distIn").value = $("dist2").value = v; $("distV").textContent = $("dist2V").textContent = v; store.set("bv-dist", v); };
+setDist(store.get("bv-dist", "4"));
 const viewDist = () => +$("dist2").value;
-$("distIn").oninput = () => { $("dist2").value = $("distIn").value; $("distV").textContent = $("distIn").value; store.set("bv-dist", $("distIn").value); };
-$("dist2").oninput = () => { $("distIn").value = $("dist2").value; store.set("bv-dist", $("dist2").value); };
+$("distIn").oninput = () => setDist($("distIn").value);
+$("dist2").oninput = () => setDist($("dist2").value);
+$("fovIn").value = camera.fov; $("fovV").textContent = camera.fov;
+$("fovIn").oninput = () => { camera.fov = +$("fovIn").value; $("fovV").textContent = camera.fov; camera.updateProjectionMatrix(); store.set("bv-fov", camera.fov); };
+$("sensIn").value = Math.round(sens * 10000); $("sensV").textContent = $("sensIn").value;
+$("sensIn").oninput = () => { sens = +$("sensIn").value / 10000; $("sensV").textContent = $("sensIn").value; store.set("bv-sens", $("sensIn").value); };
 $("play").onclick = () => { started = true; $("start").hidden = true; hello(); lock(); };
-$("resume").onclick = () => lock();
+$("helpBtn").onclick = () => showDialog("help");
 $("creative2").onchange = () => sendJ({ type: "mode", creative: $("creative2").checked });
 $("creativeIn").onchange = () => { if (started) sendJ({ type: "mode", creative: $("creativeIn").checked }); };
-$("saveName").onclick = () => { const n = $("name2").value.trim(); if (n) { sendJ({ type: "name", name: n }); store.set("bv-name", n); toast("Nome salvo — aparece para os outros ao reentrar."); } };
-$("goHome").onclick = () => { sendJ({ type: "home" }); lock(); };
+$("optOk").onclick = () => {
+  const n = $("name2").value.trim();
+  if (n && n !== $("nameIn").value) { sendJ({ type: "name", name: n }); store.set("bv-name", n); $("nameIn").value = n; $("appTitle").textContent = `BlockVerse — ${n}`; toast("Nome salvo — os outros veem o novo nome quando você reentrar."); }
+  $("options").hidden = true; if (started) lock();
+};
 $("respawn").onclick = () => { sendJ({ type: "respawn" }); $("dead").hidden = true; lock(); };
-function lock() { canvas.requestPointerLock?.(); }
+$("invClose").onclick = () => closePanel();
+function lock() { if (!started || !$("dead").hidden) return; canvas.requestPointerLock?.(); }
+
+// ---------- Janelas e menus (Win98) ----------
+const DIALOGS = ["pause", "options", "help", "about"];
+function hideDialogs() { for (const d of DIALOGS) $(d).hidden = true; }
+function showDialog(id) { hideDialogs(); closeMenus(); if (id === "options") $("name2").value = $("nameIn").value; $(id).hidden = false; document.exitPointerLock?.(); }
+function closeMenus() { document.querySelectorAll(".dropdown").forEach(d => d.hidden = true); document.querySelectorAll(".menubar .mi").forEach(m => m.classList.remove("open")); }
+document.querySelectorAll(".menubar .mi").forEach(mi => {
+  const open = () => { closeMenus(); const d = $(mi.dataset.menu); d.hidden = false; d.style.left = `${mi.offsetLeft}px`; mi.classList.add("open"); };
+  mi.onmousedown = e => { e.stopPropagation(); if (mi.classList.contains("open")) closeMenus(); else { document.exitPointerLock?.(); open(); } };
+  mi.onmouseenter = () => { if (document.querySelector(".menubar .mi.open")) open(); };
+});
+document.addEventListener("mousedown", e => { if (!e.target.closest(".dropdown")) closeMenus(); }, true);
+function act(a) {
+  closeMenus();
+  if (a === "resume") { hideDialogs(); lock(); }
+  else if (a === "inv") { if (started && !stat.dead) openInventory(); }
+  else if (a === "home") { sendJ({ type: "home" }); hideDialogs(); lock(); }
+  else if (a === "creative") sendJ({ type: "mode", creative: !stat.creative });
+  else if (a === "close") closeGame();
+  else if (a === "full") toggleFull();
+  else showDialog(a);
+}
+document.querySelectorAll("[data-act]").forEach(el => el.addEventListener("click", () => act(el.dataset.act)));
+document.querySelectorAll("[data-close]").forEach(el => el.addEventListener("click", () => { $(el.dataset.close).hidden = true; if (started && !openUI) $("pause").hidden = false; }));
+$("tbMin").onclick = () => { document.exitPointerLock?.(); if (started) showDialog("pause"); };
+$("tbMax").onclick = () => toggleFull();
+$("tbClose").onclick = () => closeGame();
+function toggleFull() {
+  if (document.fullscreenElement) return document.exitFullscreen();
+  $("app").requestFullscreen?.().catch(() => { try { parent.document.getElementById("btn-max")?.click(); } catch {} });
+}
+function closeGame() { try { if (window.top !== window) { window.top.location.hash = "#/"; return; } } catch {} history.back(); }
+
 document.addEventListener("pointerlockchange", () => {
   locked = document.pointerLockElement === canvas;
-  if (locked) { $("pause").hidden = true; closePanel(true); }
-  else if (started && !openUI && !chatOpen && $("dead").hidden) $("pause").hidden = false;
-  mouseL = false;
+  if (locked) { hideDialogs(); closePanel(true); closeMenus(); }
+  else if (started && !openUI && !chatOpen && $("dead").hidden && DIALOGS.every(d => $(d).hidden)) $("pause").hidden = false;
+  mouseL = false; bowStart = 0;
 });
 canvas.addEventListener("click", () => { if (started && !locked && !openUI) lock(); });
 document.addEventListener("mousemove", e => {
   if (!locked || !me) return;
-  me.yaw -= e.movementX * 0.0025; me.pitch -= e.movementY * 0.0025;
+  me.yaw -= e.movementX * sens; me.pitch -= e.movementY * sens;
   me.pitch = Math.max(-1.55, Math.min(1.55, me.pitch));
 });
 document.addEventListener("mousedown", e => {
   if (!locked) return;
   if (e.button === 0) { mouseL = true; tryAttack(); }
-  if (e.button === 2) rightClick();
+  if (e.button === 2) { if (ITEM[heldId()]?.bow) bowStart = performance.now(); else rightClick(); }
 });
-document.addEventListener("mouseup", e => { if (e.button === 0) { mouseL = false; digTarget = null; digProg = 0; } });
+document.addEventListener("mouseup", e => {
+  if (e.button === 0) { mouseL = false; digTarget = null; digProg = 0; }
+  if (e.button === 2 && bowStart) shootBow();
+});
 document.addEventListener("contextmenu", e => e.preventDefault());
 document.addEventListener("wheel", e => { if (locked) { sel = (sel + (e.deltaY > 0 ? 1 : 8)) % 9; selChanged(); } });
-let chatOpen = false;
 document.addEventListener("keydown", e => {
   if (chatOpen) {
     if (e.key === "Enter") { const t = $("chatin").value.trim(); if (t) sendJ({ type: "chat", text: t }); closeChat(); }
@@ -354,7 +452,7 @@ document.addEventListener("keydown", e => {
   if (!locked) return;
   keys[e.code] = true;
   if (e.code.startsWith("Digit") && e.code !== "Digit0") { sel = +e.code.slice(5) - 1; selChanged(); }
-  if (e.code === "KeyE") { sendJ({ type: "openinv" }); ui = { cursor: null, grid: [], size: 2, result: null, f: null }; openPanel("inventory"); }
+  if (e.code === "KeyE") openInventory();
   if (e.code === "KeyT" || e.key === "Enter") { e.preventDefault(); openChat(); }
   if (e.code === "KeyH") sendJ({ type: "home" });
   if (e.code === "KeyF" && stat.creative) { me.fly = !me.fly; toast(me.fly ? "Voo ligado" : "Voo desligado"); }
@@ -362,43 +460,57 @@ document.addEventListener("keydown", e => {
   if (["Space", "Tab"].includes(e.code)) e.preventDefault();
 });
 document.addEventListener("keyup", e => { keys[e.code] = false; });
+addEventListener("blur", () => { for (const k in keys) keys[k] = false; });
 function openChat() { chatOpen = true; $("chatin").style.display = "block"; $("chatin").value = ""; document.exitPointerLock(); setTimeout(() => $("chatin").focus(), 0); }
 function closeChat() { chatOpen = false; $("chatin").style.display = "none"; $("chatin").blur(); lock(); }
-function selChanged() { drawHotbar(); sendJ({ type: "sel", slot: sel }); digTarget = null; digProg = 0; }
+function selChanged() { drawHotbar(); sendJ({ type: "sel", slot: sel }); digTarget = null; digProg = 0; bowStart = 0; }
+function openInventory() { sendJ({ type: "openinv" }); ui = { cursor: null, grid: [], size: 2, result: null, f: null, chest: null }; openPanel("inventory"); }
 
 // ======================= Física do jogador =======================
 const PW = 0.3, PH = 1.8, EYE = 1.62;
 function collidesAt(x, y, z) {
   for (let bx = Math.floor(x - PW); bx <= Math.floor(x + PW); bx++)
     for (let by = Math.floor(y); by <= Math.floor(y + PH - 0.001); by++)
-      for (let bz = Math.floor(z - PW); bz <= Math.floor(z + PW); bz++) if (solidAt(bx, by, bz)) return true;
+      for (let bz = Math.floor(z - PW); bz <= Math.floor(z + PW); bz++) {
+        const h = solidH(bx, by, bz);
+        if (h && y < by + h - 0.0001) return true;
+      }
   return false;
 }
+const cell = (dy) => getB(Math.floor(me.x), Math.floor(me.y + dy), Math.floor(me.z));
 function physics(dt) {
   if (!me || stat.dead) return;
   if (!chunks.has(ckey(Math.floor(me.x / CS), Math.floor(me.z / CS)))) return; // espera o chunk chegar
-  const inWater = getB(Math.floor(me.x), Math.floor(me.y + 0.4), Math.floor(me.z)) === WATER;
-  const headWater = getB(Math.floor(me.x), Math.floor(me.y + EYE), Math.floor(me.z)) === WATER;
-  $("water").style.display = headWater ? "block" : "none";
+  const feet = cell(0.1), body = cell(0.9), head = cell(EYE);
+  const liquid = isLiq(feet) ? feet : isLiq(body) ? body : 0;
+  const lava = liquid === LAVA;
+  $("water").style.display = head === WATER ? "block" : "none";
+  $("lavafx").style.display = head === LAVA ? "block" : "none";
+  const ladder = BLOCKS[feet]?.climb || BLOCKS[body]?.climb;
   let fx = 0, fz = 0;
   if (locked) { if (keys.KeyW) fz -= 1; if (keys.KeyS) fz += 1; if (keys.KeyA) fx -= 1; if (keys.KeyD) fx += 1; }
+  const moving = fx || fz;
   const len = Math.hypot(fx, fz) || 1; fx /= len; fz /= len;
-  const sprint = keys.ShiftLeft && !me.fly && fz < 0;
-  const speed = me.fly ? 11 : inWater ? 2.6 : sprint ? 5.8 : 4.3;
+  const sprint = keys.ShiftLeft && !me.fly && fz < 0 && !liquid;
+  const speed = me.fly ? 11 : lava ? 1.4 : liquid ? 2.8 : sprint ? 5.8 : 4.3;
   const sin = Math.sin(me.yaw), cos = Math.cos(me.yaw);
   const wx = (fx * cos + fz * sin) * speed, wz = (-fx * sin + fz * cos) * speed;
-  const acc = me.onGround || me.fly || inWater ? 1 - Math.exp(-dt * 18) : 1 - Math.exp(-dt * 3);
+  const onIce = me.onGround && getB(Math.floor(me.x), Math.floor(me.y - 0.05), Math.floor(me.z)) === 34;
+  const acc = me.fly || liquid ? 1 - Math.exp(-dt * 12) : me.onGround ? 1 - Math.exp(-dt * (onIce ? 2 : 18)) : 1 - Math.exp(-dt * 3);
   me.vx += (wx - me.vx) * acc; me.vz += (wz - me.vz) * acc;
   if (me.fly) {
     me.vy = ((keys.Space ? 1 : 0) - (keys.ShiftLeft ? 1 : 0)) * 9;
-  } else if (inWater) {
-    me.vy -= 9 * dt; me.vy *= Math.exp(-dt * 3); if (keys.Space) me.vy = Math.min(me.vy + 22 * dt, 3.2); me.fallStart = me.y;
+  } else if (ladder) {
+    me.vy = keys.Space || (keys.KeyW && locked) ? 3.2 : keys.ShiftLeft ? 0 : Math.max(me.vy - 28 * dt, -2.4);
+  } else if (liquid) {
+    me.vy -= (lava ? 6 : 9) * dt; me.vy *= Math.exp(-dt * 2.5);
+    if (keys.Space) me.vy = Math.min(me.vy + 26 * dt, lava ? 2 : 3.6);
+    if (me.vy < -4) me.vy = -4;
   } else {
     me.vy -= 28 * dt; if (me.vy < -40) me.vy = -40;
-    if (keys.Space && me.onGround) { me.vy = 8.6; }
+    if (keys.Space && me.onGround) me.vy = 8.6;
   }
   me.sprint = sprint && Math.hypot(me.vx, me.vz) > 4;
-  // move eixo por eixo; sobe degraus de meio bloco não existe (blocos inteiros) — pula sozinho não
   const step = (axis, d) => {
     const n = { x: me.x, y: me.y, z: me.z }; n[axis] += d;
     if (!collidesAt(n.x, n.y, n.z)) { me[axis] = n[axis]; return false; }
@@ -406,25 +518,31 @@ function physics(dt) {
   };
   const steps = Math.ceil(Math.max(Math.abs(me.vx), Math.abs(me.vy), Math.abs(me.vz)) * dt / 0.3) || 1;
   const wasGround = me.onGround; me.onGround = false;
+  let blocked = false;
   for (let s = 0; s < steps; s++) {
-    if (step("x", me.vx * dt / steps)) me.vx = 0;
-    if (step("z", me.vz * dt / steps)) me.vz = 0;
+    if (step("x", me.vx * dt / steps)) { me.vx = 0; blocked = true; }
+    if (step("z", me.vz * dt / steps)) { me.vz = 0; blocked = true; }
     if (step("y", me.vy * dt / steps)) {
       if (me.vy < 0) { me.onGround = true; me.y = snapDown(); }
       me.vy = 0;
     }
   }
+  // sair da água/lava: encostado na beirada e tentando andar ou nadar, dá um impulso para subir no bloco
+  if (liquid && blocked && (moving || keys.Space) && !collidesAt(me.x, me.y + 1.2, me.z)) me.vy = Math.max(me.vy, lava ? 8 : 9.2);
+  // na superfície (cabeça fora d'água), o espaço funciona como pulo
+  if (liquid && !isLiq(head) && keys.Space && me.vy < 4 && solidUnderWater()) me.vy = 6.5;
   if (me.onGround && !wasGround && !me.fly) {
     const fall = me.fallStart - me.y;
-    if (fall > 3.5 && !stat.creative && !inWater) sendJ({ type: "fall", dmg: Math.floor(fall - 3) });
+    if (fall > 3.5 && !stat.creative && !liquid) sendJ({ type: "fall", dmg: Math.floor(fall - 3) });
   }
-  if (me.onGround || me.fly || inWater || me.vy > 0) me.fallStart = me.y;
+  if (me.onGround || me.fly || liquid || ladder || me.vy > 0) me.fallStart = me.y;
 }
+function solidUnderWater() { return collidesAt(me.x, me.y - 0.6, me.z); } // há chão perto dos pés (água rasa)
 function snapDown() { let y = me.y; for (let i = 0; i < 20 && !collidesAt(me.x, y - 0.02, me.z); i++) y -= 0.02; return y; }
 
 // ======================= Mira =======================
 function lookDir() { const cp = Math.cos(me.pitch); return new THREE.Vector3(-Math.sin(me.yaw) * cp, Math.sin(me.pitch), -Math.cos(me.yaw) * cp); }
-function raycast(maxD = REACH) {
+function raycast(maxD = REACH, liquids = false) {
   const o = camera.position, d = lookDir();
   let x = Math.floor(o.x), y = Math.floor(o.y), z = Math.floor(o.z);
   const sx = Math.sign(d.x), sy = Math.sign(d.y), sz = Math.sign(d.z);
@@ -433,7 +551,7 @@ function raycast(maxD = REACH) {
   let n = [0, 0, 0], t = 0;
   while (t <= maxD) {
     const id = getB(x, y, z);
-    if (id > 0 && id !== WATER) return { x, y, z, id, n, t };
+    if (id > 0 && (liquids || !isLiq(id))) return { x, y, z, id, n, t };
     if (tx < ty && tx < tz) { x += sx; t = tx; tx += tdx; n = [-sx, 0, 0]; }
     else if (ty < tz) { y += sy; t = ty; ty += tdy; n = [0, -sy, 0]; }
     else { z += sz; t = tz; tz += tdz; n = [0, 0, -sz]; }
@@ -461,31 +579,44 @@ function tryAttack() {
   if (h && (!b || h.t < b.t) && actCd <= 0) { sendJ({ type: "attack", mob: h.mob.key, slot: sel }); actCd = 0.35; mouseL = false; }
 }
 const heldId = () => inv[sel]?.[0];
+function shootBow() {
+  const power = Math.min(1, (performance.now() - bowStart) / 900); bowStart = 0;
+  if (power < 0.15) return;
+  const d = lookDir(); sendJ({ type: "shoot", dir: [d.x, d.y, d.z], power, slot: sel });
+}
 function rightClick() {
   if (actCd > 0 || !me) return; actCd = 0.2;
-  const hit = raycast(), held = heldId(), it = ITEM[held];
+  const held = heldId(), it = ITEM[held];
+  if (held === 116) { // balde vazio: mira na água
+    const w = raycast(REACH, true);
+    if (w && w.id === WATER) return sendJ({ type: "use", x: w.x, y: w.y, z: w.z, slot: sel });
+  }
+  const hit = raycast();
   if (hit) {
     const b = BLOCKS[hit.id];
     if (b.use && !keys.ShiftLeft) return sendJ({ type: "use", x: hit.x, y: hit.y, z: hit.z, slot: sel });
-    if (it?.tool === "enxada" && (hit.id === 1 || hit.id === 2)) return sendJ({ type: "use", x: hit.x, y: hit.y, z: hit.z, slot: sel });
-    if (held && (placeable(held) || it?.plants)) {
+    if (it?.tool === "enxada" && (hit.id === 1 || hit.id === 2 || hit.id === 32)) return sendJ({ type: "use", x: hit.x, y: hit.y, z: hit.z, slot: sel });
+    if (held && (placeable(held) || it?.plants || held === 117)) {
       const into = b.replaceable;
       const p = into ? [hit.x, hit.y, hit.z] : [hit.x + hit.n[0], hit.y + hit.n[1], hit.z + hit.n[2]];
-      if (BLOCKS[held]?.solid && !into && collidesPlayer(p)) return;
-      return sendJ({ type: "place", x: p[0], y: p[1], z: p[2], slot: sel, yaw: me.yaw });
+      if (BLOCKS[held]?.solid && !into && collidesPlayer(p, BLOCKS[held].ch ?? 1)) return;
+      return sendJ({ type: "place", x: p[0], y: p[1], z: p[2], slot: sel, yaw: me.yaw, n: hit.n });
     }
   }
   if (it?.food) sendJ({ type: "eat", slot: sel });
 }
-const collidesPlayer = ([x, y, z]) => me.x + PW > x && me.x - PW < x + 1 && me.z + PW > z && me.z - PW < z + 1 && me.y < y + 1 && me.y + PH > y;
+const collidesPlayer = ([x, y, z], h = 1) => me.x + PW > x && me.x - PW < x + 1 && me.z + PW > z && me.z - PW < z + 1 && me.y < y + h && me.y + PH > y;
 
 const selBox = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1.004, 1.004, 1.004)), new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.6 }));
 scene.add(selBox);
 const crack = new THREE.Mesh(new THREE.BoxGeometry(1.01, 1.01, 1.01), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false }));
 scene.add(crack);
+function setBar(p) { $("dig").style.display = p == null ? "none" : "block"; if (p != null) $("dig").firstElementChild.style.width = `${Math.min(100, p * 100)}%`; }
 function updateDig(dt) {
   const hit = locked ? raycast() : null;
-  selBox.visible = !!hit; crack.visible = false; $("dig").style.display = "none";
+  selBox.visible = !!hit; crack.visible = false;
+  if (bowStart) { const p = Math.min(1, (performance.now() - bowStart) / 900); setBar(p); camera.fov = +$("fovIn").value - 12 * p; camera.updateProjectionMatrix(); }
+  else { if (camera.fov !== +$("fovIn").value) { camera.fov = +$("fovIn").value; camera.updateProjectionMatrix(); } setBar(null); }
   if (!hit) { digTarget = null; return; }
   selBox.position.set(hit.x + 0.5, hit.y + 0.5, hit.z + 0.5);
   if (!mouseL || stat.dead) return;
@@ -494,21 +625,22 @@ function updateDig(dt) {
   const time = stat.creative ? 0.12 : digTime(hit.id, heldId());
   if (!isFinite(time)) return;
   digProg += dt / Math.max(0.05, time);
-  if (!stat.creative) { crack.visible = true; crack.position.copy(selBox.position); crack.material.opacity = Math.min(0.55, digProg * 0.6); $("dig").style.display = "block"; $("dig").firstChild.style.width = `${Math.min(100, digProg * 100)}%`; }
+  if (!stat.creative) { crack.visible = true; crack.position.copy(selBox.position); crack.material.opacity = Math.min(0.55, digProg * 0.6); setBar(digProg); }
   if (digProg >= 1) {
     sendJ({ type: "break", x: hit.x, y: hit.y, z: hit.z, slot: sel });
     const above = getB(hit.x, hit.y + 1, hit.z);
     setLocal(hit.x, hit.y, hit.z, AIR, 0);
-    if (above > 0 && above !== WATER && BLOCKS[above].shape !== "cube") setLocal(hit.x, hit.y + 1, hit.z, AIR, 0);
+    if (above > 0 && ["cross", "slab", "small", "door", "cactus"].includes(BLOCKS[above].shape)) setLocal(hit.x, hit.y + 1, hit.z, AIR, 0);
     digTarget = null; digProg = 0;
   }
 }
 
-// ======================= Interface =======================
+// ======================= HUD =======================
 let toastT = null;
-function toast(t) { const el = $("toast"); el.textContent = t; el.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => el.style.opacity = 0, 2600); }
+function toast(t) { const el = $("toast"); el.textContent = t; el.style.opacity = 1; clearTimeout(toastT); toastT = setTimeout(() => el.style.opacity = 0, 2800); }
 function chatLine(from, text) {
-  const d = document.createElement("div"); const b = document.createElement("b"); b.textContent = from === "★" ? "★ " : `${from}: `;
+  const d = document.createElement("div"); d.className = "tip98";
+  const b = document.createElement("b"); b.textContent = from === "★" ? "★ " : `${from}: `;
   d.append(b, document.createTextNode(text)); $("chatlog").append(d);
   while ($("chatlog").children.length > 8) $("chatlog").firstChild.remove();
   setTimeout(() => { d.style.opacity = 0; }, 12000);
@@ -519,23 +651,28 @@ function slotEl(st, cls = "") {
   return d;
 }
 function drawHotbar() {
-  const hb = $("hotbar"); hb.replaceChildren(...inv.slice(0, 9).map((st, i) => slotEl(st, i === sel ? "sel" : "")));
+  $("hotbar").replaceChildren(...inv.slice(0, 9).map((st, i) => slotEl(st, i === sel ? "sel" : "")));
   $("held").textContent = inv[sel] ? itemName(inv[sel][0]) : "";
 }
+function iconRow(kind, value, max = 20) {
+  return Array.from({ length: max / 2 }, (_, i) => { const v = value - i * 2, im = new Image(); im.src = hudIcon(kind, v >= 2 ? "full" : v === 1 ? "half" : "empty"); return im; });
+}
 function drawBars() {
-  const hearts = n => "❤".repeat(Math.ceil(n / 2)) + "🖤".repeat(10 - Math.ceil(n / 2));
-  $("hp").textContent = stat.creative ? "✨ criativo" : hearts(stat.hp);
-  $("food").textContent = stat.creative ? "" : "🍗".repeat(Math.ceil(stat.food / 2)) + "·".repeat(10 - Math.ceil(stat.food / 2));
+  if (stat.creative) { $("hp").replaceChildren(); $("food").replaceChildren(); $("air").replaceChildren(); return; }
+  $("hp").replaceChildren(...iconRow("heart", stat.hp));
+  $("food").replaceChildren(...iconRow("food", stat.food).reverse());
+  const air = stat.air ?? 15;
+  $("air").replaceChildren(...(air < 15 ? Array.from({ length: Math.ceil(air / 1.5) }, () => { const im = new Image(); im.src = hudIcon("bubble", "full"); return im; }) : []));
 }
 
-// ---------- Inventário / crafting (grade estilo cursor) / fornalha ----------
-let ui = { cursor: null, grid: [], size: 2, result: null, f: null };
+// ---------- Inventário / crafting (grade com cursor) / fornalha / baú ----------
 function openPanel(kind) {
   openUI = { ui: kind };
-  document.exitPointerLock?.();
-  $("pause").hidden = true; $("inv").hidden = false;
-  $("invTitle").textContent = kind === "workbench" ? "BANCADA" : kind === "furnace" ? "FORNALHA" : "INVENTÁRIO";
-  $("craftBox").hidden = kind === "furnace"; $("furnBox").hidden = kind !== "furnace";
+  document.exitPointerLock?.(); hideDialogs(); closeMenus();
+  $("inv").hidden = false;
+  $("invTitle").textContent = { workbench: "Bancada", furnace: "Fornalha", chest: "Baú" }[kind] || "Inventário";
+  $("craftBox").hidden = kind === "furnace" || kind === "chest"; $("furnBox").hidden = kind !== "furnace"; $("chestBox").hidden = kind !== "chest";
+  $("craftLegend").textContent = kind === "workbench" ? "Crafting (3×3)" : "Crafting (2×2)";
   showTab("book"); drawInv();
 }
 function closePanel(silent) {
@@ -545,7 +682,7 @@ function closePanel(silent) {
   if (!silent) lock();
 }
 function showTab(t) {
-  $("tabBook").classList.toggle("on", t === "book"); $("tabCreative").classList.toggle("on", t === "creative");
+  $("tabBook").setAttribute("aria-selected", t === "book"); $("tabCreative").setAttribute("aria-selected", t === "creative");
   $("recipes").hidden = t !== "book"; $("palette").hidden = t !== "creative";
   if (t === "creative") drawPalette();
 }
@@ -560,9 +697,10 @@ function drawInv() {
   if (!openUI) return;
   $("invGrid").replaceChildren(...Array.from({ length: 27 }, (_, k) => clickable(slotEl(inv[k + 9]), k + 9)));
   $("invHot").replaceChildren(...Array.from({ length: 9 }, (_, k) => clickable(slotEl(inv[k], k === sel ? "sel" : ""), k)));
-  const g = $("cgrid"); g.style.gridTemplateColumns = `repeat(${ui.size}, 44px)`;
-  g.replaceChildren(...Array.from({ length: ui.size ** 2 }, (_, i) => clickable(slotEl(ui.grid[i]), `g${i}`)));
+  const g = $("cgrid"); g.style.gridTemplateColumns = `repeat(${ui.size}, 38px)`;
+  g.replaceChildren(...Array.from({ length: ui.size ** 2 }, (_, i) => clickable(slotEl(ui.grid?.[i]), `g${i}`)));
   $("cout").replaceChildren(clickable(slotEl(ui.result, ui.result ? "ready" : ""), "out"));
+  if (openUI.ui === "chest") $("chestGrid").replaceChildren(...Array.from({ length: 27 }, (_, i) => clickable(slotEl(ui.chest?.[i]), `k${i}`)));
   if (openUI.ui === "furnace") drawFurnace();
   drawRecipes(); drawCursor();
 }
@@ -571,13 +709,12 @@ function drawCursor() {
   const c = $("cursor");
   if (!openUI || !ui.cursor) { c.hidden = true; return; }
   c.hidden = false; c.replaceChildren(...[...slotEl(ui.cursor).childNodes]);
-  c.style.left = `${mouseXY[0] - 22}px`; c.style.top = `${mouseXY[1] - 22}px`;
+  c.style.left = `${mouseXY[0] - 19}px`; c.style.top = `${mouseXY[1] - 19}px`;
 }
 $("trash").onmousedown = e => { e.preventDefault(); sendJ({ type: "click", slot: "trash" }); };
-const count = id => inv.reduce((a, s) => a + (s && s[0] === id ? s[1] : 0), 0) + ui.grid.reduce((a, s) => a + (s && s[0] === id ? s[1] : 0), 0);
+const count = id => inv.reduce((a, s) => a + (s && s[0] === id ? s[1] : 0), 0) + (ui.grid || []).reduce((a, s) => a + (s && s[0] === id ? s[1] : 0), 0);
 function miniIcon(id, size = 16) { const i = new Image(); i.src = iconURL(id, atlasCanvas); i.width = i.height = size; i.title = itemName(id); return i; }
 function drawRecipes() {
-  const big = ui.size === 3;
   const list = RECIPES.map((r, i) => ({ ...r, i })).filter(r => r.shape);
   const fits = r => r.w <= ui.size && r.h <= ui.size;
   const has = r => r.need.every(([id, n]) => count(id) >= n);
@@ -586,17 +723,16 @@ function drawRecipes() {
     const ok = fits(r) && has(r), d = document.createElement("div"); d.className = `rec ${ok ? "" : "no"}`;
     const name = document.createElement("span"); name.textContent = `${itemName(r.out[0])}${r.out[1] > 1 ? ` ×${r.out[1]}` : ""}`;
     const pat = document.createElement("div"); pat.className = "pat"; pat.style.gridTemplateColumns = `repeat(${r.w}, 16px)`;
-    for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) { const ch = r.shape[y][x] ?? " "; const cell = document.createElement("i"); if (ch !== " ") cell.append(miniIcon(r.key[ch])); pat.append(cell); }
-    const tag = document.createElement("small"); tag.className = "where"; tag.textContent = !fits(r) ? "3×3 bancada" : !has(r) ? "faltam itens" : "";
+    for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) { const ch = r.shape[y][x] ?? " "; const c = document.createElement("i"); if (ch !== " ") c.append(miniIcon(r.key[ch])); pat.append(c); }
+    const tag = document.createElement("small"); tag.className = "where"; tag.textContent = !fits(r) ? "bancada" : !has(r) ? "faltam itens" : "";
     d.append(miniIcon(r.out[0], 24), name, tag, pat);
     d.title = ok ? "Clique para colocar os ingredientes na grade" : !fits(r) ? "Precisa da bancada (grade 3×3)" : "Você não tem todos os ingredientes";
     if (ok) d.onclick = () => sendJ({ type: "fill", r: r.i });
     return d;
   });
-  const h = document.createElement("h3"); h.textContent = "Fornalha (fundição)";
+  const h = document.createElement("h4"); h.textContent = "Fornalha (fundição)";
   const furn = RECIPES.filter(r => r.where === "furnace").map(r => { const d = document.createElement("div"); d.className = "rec no2"; const t = document.createElement("span"); t.textContent = `${itemName(r.need[0][0])} → ${itemName(r.out[0])}`; d.append(miniIcon(r.need[0][0], 24), t, miniIcon(r.out[0], 24)); return d; });
   $("recipes").replaceChildren(...els, h, ...furn);
-  void big;
 }
 function drawPalette() {
   const ids = [...BLOCKS.filter(b => placeable(b.id)).map(b => b.id), ...Object.values(ITEM).filter(i => i.item).map(i => i.id)];
@@ -604,23 +740,21 @@ function drawPalette() {
 }
 function drawFurnace() {
   const f = ui.f || {};
-  for (const [k, slot] of [["in", "fin"], ["fuel", "ffuel"], ["out", "fout"]]) {
-    const host = document.querySelector(`#furn [data-f="${k}"]`);
-    host.replaceChildren(clickable(slotEl(f[k]), slot));
-  }
-  $("furnProg").firstChild.style.width = `${Math.min(100, (f.prog || 0) / 5 * 100)}%`;
+  for (const [k, slot] of [["in", "fin"], ["fuel", "ffuel"], ["out", "fout"]]) document.querySelector(`#furn [data-f="${k}"]`).replaceChildren(clickable(slotEl(f[k]), slot));
+  $("furnProg").firstElementChild.style.width = `${Math.min(100, (f.prog || 0) / 5 * 100)}%`;
   $("furnFlame").classList.toggle("on", f.burn > 0);
 }
 document.addEventListener("mousemove", e => {
   mouseXY = [e.clientX, e.clientY];
-  if (openUI && ui.cursor) { $("cursor").style.left = `${e.clientX - 22}px`; $("cursor").style.top = `${e.clientY - 22}px`; }
+  if (openUI && ui.cursor) { $("cursor").style.left = `${e.clientX - 19}px`; $("cursor").style.top = `${e.clientY - 19}px`; }
   const t = e.target.closest?.("[data-tip]"), tip = $("tip");
   if (!openUI || ui.cursor || !t || !t.dataset.tip) { tip.style.display = "none"; return; }
-  tip.textContent = t.dataset.tip; tip.style.display = "block"; tip.style.left = `${e.clientX + 14}px`; tip.style.top = `${e.clientY + 10}px`;
+  tip.textContent = t.dataset.tip; tip.style.display = "block"; tip.style.left = `${e.clientX + 14}px`; tip.style.top = `${e.clientY + 16}px`;
 });
 
 // ======================= Laço =======================
 const skyDay = new THREE.Color(0x87c6ff), skyNight = new THREE.Color(0x070b1e), skyDusk = new THREE.Color(0xff8a5a), tmp = new THREE.Color();
+const skyWater = new THREE.Color(0x1a3a7a), skyLava = new THREE.Color(0x8a2a00);
 let last = performance.now(), posT = 0, chunkT = 0, infoT = 0, fps = 0, frames = 0, fpsT = 0;
 function loop(now) {
   requestAnimationFrame(loop);
@@ -635,22 +769,20 @@ function loop(now) {
     if (posT <= 0) { posT = 0.1; sendJ({ type: "pos", x: +me.x.toFixed(3), y: +me.y.toFixed(3), z: +me.z.toFixed(3), yaw: +me.yaw.toFixed(3), pitch: +me.pitch.toFixed(3), sprint: me.sprint }); }
     chunkT -= dt; if (chunkT <= 0) { chunkT = 0.25; manageChunks(); }
   }
-  // meshes pendentes: os mais próximos primeiro, poucos por quadro
-  if (dirty.size && me) {
+  if (dirty.size && me) { // meshes pendentes: os mais próximos primeiro, poucos por quadro
     const pcx = Math.floor(me.x / CS), pcz = Math.floor(me.z / CS);
     const list = [...dirty].filter(k => chunks.has(k)).map(k => { const [a, b] = k.split(",").map(Number); return [k, Math.hypot(a - pcx, b - pcz)]; }).sort((a, b) => a[1] - b[1]);
     for (const k of [...dirty]) if (!chunks.has(k)) dirty.delete(k);
     const t0 = performance.now();
     for (const [k] of list) { remesh(chunks.get(k)); dirty.delete(k); if (performance.now() - t0 > 12) break; }
   }
-  // céu e luz do dia
-  const t = worldTime + (now - timeAt), day = daylight(t), ph = ((t % DAY_MS_CLIENT) / DAY_MS_CLIENT) * Math.PI * 2;
+  const t = worldTime + (now - timeAt), day = daylight(t), ph = ((t % DAY_MS) / DAY_MS) * Math.PI * 2;
   const dusk = Math.max(0, 1 - Math.abs(Math.sin(ph)) * 3) * (day > 0.05 ? 1 : 0);
   tmp.copy(skyNight).lerp(skyDay, day).lerp(skyDusk, dusk * 0.45);
-  const under = $("water").style.display === "block";
-  scene.background = under ? new THREE.Color(0x1a3a7a) : tmp;
+  const underW = $("water").style.display === "block", underL = $("lavafx").style.display === "block";
+  scene.background = underL ? skyLava : underW ? skyWater : tmp;
   uniforms.uDay.value = 0.12 + day * 0.88; uniforms.fogColor.value.copy(scene.background);
-  const far = viewDist() * CS; uniforms.fogNear.value = under ? 2 : far * 0.6; uniforms.fogFar.value = under ? 18 : far * 0.95;
+  const far = viewDist() * CS; uniforms.fogNear.value = underL ? 0.5 : underW ? 2 : far * 0.6; uniforms.fogFar.value = underL ? 4 : underW ? 18 : far * 0.95;
   amb.intensity = 0.25 + day * 0.6; sun.intensity = day * 0.8;
   if (me) {
     const sx = Math.cos(ph) * 150, sy = Math.sin(ph) * 150;
@@ -659,16 +791,20 @@ function loop(now) {
     sun.position.set(sx, Math.max(20, sy), 40);
   }
   animateEntities(dt, now / 1000);
+  if (!me) scene.background = skyNight;
   renderer.render(scene, camera);
   frames++; fpsT += dt; if (fpsT >= 1) { fps = frames; frames = 0; fpsT = 0; }
-  infoT -= dt; if (infoT <= 0 && me) { infoT = 0.25; drawInfo(t); }
+  infoT -= dt; if (infoT <= 0 && me) { infoT = 0.25; drawStatus(t); }
 }
-const DAY_MS_CLIENT = 10 * 60 * 1000;
-function drawInfo(t) {
-  const frac = (t % DAY_MS_CLIENT) / DAY_MS_CLIENT, hours = (frac * 24 + 6) % 24;
+function drawStatus(t) {
+  const frac = (t % DAY_MS) / DAY_MS, hours = (frac * 24 + 6) % 24;
   const hh = String(Math.floor(hours)).padStart(2, "0"), mm = String(Math.floor((hours % 1) * 60)).padStart(2, "0");
   const hit = locked ? raycast() : null;
-  $("info").innerHTML = `<b>BlockVerse</b> · ${fps} fps<br>XYZ ${me.x.toFixed(1)} / ${me.y.toFixed(1)} / ${me.z.toFixed(1)}<br>🕒 ${hh}:${mm} ${daylight(t) < 0.25 ? "🌙 noite (Shades!)" : "☀"}<br>👥 ${others.size + 1} na rede · 🐾 ${mobs.size}` + (hit ? `<br>🎯 ${itemName(hit.id)}${BLOCKS[hit.id].crop ? ` (${Math.min(8, getM(hit.x, hit.y, hit.z) + 1)}/8)` : ""}${hit.id === 21 ? ` · energia ${getM(hit.x, hit.y, hit.z)}` : ""}` : "");
+  $("stPos").textContent = `X ${me.x.toFixed(0)}  Y ${me.y.toFixed(0)}  Z ${me.z.toFixed(0)}`;
+  $("stTime").textContent = `${hh}:${mm} ${daylight(t) < 0.25 ? "noite" : "dia"}`;
+  $("stPlayers").textContent = `${others.size + 1} jogador(es) · ${mobs.size} criaturas`;
+  $("stTarget").textContent = hit ? `${itemName(hit.id)}${BLOCKS[hit.id].crop ? ` — crescimento ${Math.min(8, getM(hit.x, hit.y, hit.z) + 1)}/8` : ""}${hit.id === 21 ? ` — energia ${getM(hit.x, hit.y, hit.z)}` : ""}` : "Pronto";
+  $("stFps").textContent = `${fps} qps`;
 }
 function manageChunks() {
   const pcx = Math.floor(me.x / CS), pcz = Math.floor(me.z / CS), R = viewDist();
@@ -687,7 +823,10 @@ function manageChunks() {
   for (const k of requested) { const [a, b] = k.split(",").map(Number); if (Math.abs(a - pcx) > R + 2 || Math.abs(b - pcz) > R + 2) requested.delete(k); }
 }
 
+const logo = iconURL(1, atlasCanvas);
+$("logo").src = $("logo2").src = logo;
+$("titleIco").src = logo;
 drawHotbar(); drawBars();
 connect();
 requestAnimationFrame(loop);
-window.__bv = { get me() { return me; }, chunks, mobs, others, get inv() { return inv; }, get stat() { return stat; }, sendJ, raycast, getB, getM, setSel: i => { sel = i; selChanged(); } };
+window.__bv = { get me() { return me; }, chunks, mobs, others, arrows, get inv() { return inv; }, get stat() { return stat; }, get ui() { return ui; }, sendJ, raycast, getB, getM, keys, setSel: i => { sel = i; selChanged(); }, openInventory, setLocked: v => { locked = v; } };

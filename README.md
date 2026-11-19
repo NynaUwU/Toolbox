@@ -61,10 +61,12 @@ Para iniciar junto com o Windows: `Win + R` → `shell:startup` → cole ali um 
 - **NetCyties**: city builder isométrico — cada aparelho da rede (cada IP) é dono de uma cidade e só ele pode construir nela; as outras podem ser visitadas.
   Ruas, zonas residencial/comercial/industrial, parques, usina, demolir, expandir terreno, impostos e demanda RCI; a simulação roda no servidor (1 mês a cada 3 s).
   No **mapa da rede**, o roteador fica no centro e cada cidade se liga a ele por uma avenida (outras sub-redes passam por um nó próprio); ligar as ruas à entrada **AV** dá comércio com a rede.
-- **BlockVerse**: mundo 3D de blocos compartilhado por todos da rede (three.js no navegador, simulação no servidor).
-  - **Mundo de todos:** qualquer um constrói em qualquer lugar; todos nascem no mesmo ponto (tecla H volta para lá).
-  - **Sobrevivência:** vida, fome (comer recupera), dano de queda; **modo criativo** opcional (voo, itens infinitos).
-  - **Criaturas:** Capybara e Chicken (pacíficas, dão carne), **Shade** (hostil à noite, queima de dia).
+- **BlockVerse**: mundo 3D de blocos compartilhado por todos da rede (three.js no navegador, simulação no servidor), numa janela no estilo Windows 98 (menus Jogo/Opções/Ajuda, barra de status, diálogos clássicos).
+  - **Mundo de todos:** qualquer um constrói em qualquer lugar; todos nascem no mesmo ponto, ou na própria cama (tecla H volta para lá).
+  - **Biomas e cavernas:** planícies, florestas (carvalho e bétula), neve (pinheiros, gelo) e deserto (arenito, cactos); cavernas com lava no fundo; minérios de carvão, ferro, ouro, Voltite e Azurite.
+  - **Sobrevivência:** vida, fome, dano de queda, lava, cacto e afogamento (bolhas de ar); **modo criativo** opcional (voo, itens infinitos). Para sair da água, ande ou nade contra a beirada.
+  - **Criaturas:** Capybara, Chicken (penas) e Sheep (lã) pacíficas; **Shade** (noite, queima de dia) e **Crawler** (noite e cavernas, solta linha). Hostis não nascem perto de tochas e lâmpadas.
+  - **Novidades:** baú (27 espaços, compartilhado), cama (renascer e pular a noite quando todos dormem), escada, balde (encher e colocar água), arco e flechas (segure para carregar), maçã e maçã dourada, torta de abóbora, abóbora/lanterna, tijolos de pedra, blocos de ouro e Azurite, ferramentas de Azurite.
   - **Crafting em grade:** 2×2 no inventário (E) e 3×3 na bancada; a receita depende do formato (vale espelhada). Inventário com cursor: esquerdo pega/solta/junta pilhas, direito pega metade/solta 1, Shift+clique move rápido. O 📖 livro de receitas mostra o formato e coloca os ingredientes na grade.
   - Itens iguais empilham até 64 (ferramentas não empilham). Ferramentas de madeira/pedra/ferro, fornalha com espaço de entrada, combustível e saída.
   - **Plantação:** enxada → terra arada; trigo e cenoura em 8 estágios (mais rápido com água por perto); pão; mudas viram árvores.

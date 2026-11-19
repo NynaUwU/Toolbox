@@ -1,5 +1,6 @@
 // BlockVerse — texturas procedurais (16×16 px) num atlas 16×8 e ícones dos itens.
 import { BLOCKS, ITEM } from "./shared.mjs";
+import { drawItemSprite } from "./sprites.js";
 
 export const ATLAS_COLS = 16, ATLAS_ROWS = 8;
 const mul = s => () => { s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s >>> 15, 1 | s); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
@@ -58,6 +59,36 @@ def("door", p => { p.fill("#a87a42", 14); p.rect(0, 0, 15, 0, "#6e4b2a"); p.rect
 def("bedrock", p => { p.fill("#3a3a3e", 40); p.spots("#18181a", 10, 2); });
 def("tallgrass", p => { p.clear(); for (let x = 0; x < 16; x += 2) { const h = 5 + p.r() * 9 | 0; for (let y = 16 - h; y < 16; y++) p.px(x + (y < 9 ? (p.r() < 0.5 ? 1 : 0) : 0), y, [60 + p.r() * 30, 140 + p.r() * 50, 40, 255]); } });
 def("flower", p => { p.clear(); p.rect(7, 7, 8, 15, "#3f8a2a"); p.rect(5, 9, 6, 10, "#4f9a2f"); const c = p.r() < 0.5 ? "#ff3fd8" : "#ffcf3f"; p.rect(5, 2, 10, 6, c); p.rect(7, 3, 8, 5, "#fff2a8"); });
+def("snow", p => { p.fill("#f2f6fa", 10); p.spots("#dfe8f2", 6, 1); });
+def("snowy_side", p => { p.fill("#8a5a35", 28); for (let x = 0; x < 16; x++) { const h = 3 + (p.r() * 3 | 0); for (let y = 0; y < h; y++) p.px(x, y, [236 + p.r() * 14, 242 + p.r() * 10, 250, 255]); } });
+def("ice", p => { p.fill("#9cc8f4", 12); for (let i = 0; i < 5; i++) { const x = p.r() * 12 | 0, y = p.r() * 12 | 0; for (let k = 0; k < 4; k++) p.px(x + k, y + k, [220, 240, 255, 255]); } });
+def("sandstone_top", p => { p.fill("#d8c88a", 12); });
+def("sandstone_side", p => { p.fill("#d4c283", 12); p.rect(0, 0, 15, 2, "#e2d49a", 8); p.rect(0, 7, 15, 7, "#b8a668"); p.rect(0, 12, 15, 15, "#c4b276", 8); });
+def("cactus_side", p => { p.fill("#3f8a2f", 14); for (let x = 1; x < 16; x += 4) p.rect(x, 0, x, 15, "#2a6a1f"); for (let i = 0; i < 10; i++) p.px(p.r() * 16, p.r() * 16, [230, 230, 200, 255]); });
+def("cactus_top", p => { p.fill("#4f9a3a", 12); p.rect(2, 2, 13, 13, "#3f8a2f"); p.rect(6, 6, 9, 9, "#5fae48"); });
+def("deadbush", p => { p.clear(); const c = "#8a6a3a"; for (const [x0, dx] of [[8, -1], [8, 1], [8, 0], [7, -2], [9, 2]]) { let x = x0; for (let y = 15; y > 4 + p.r() * 4; y--) { p.px(x, y, p.hex(c)); if (p.r() < 0.35) x += dx; } } });
+def("pine_side", p => { p.fill("#4a3220", 14); for (let x = 0; x < 16; x += 2) for (let y = 0; y < 16; y++) if (p.r() < 0.6) p.px(x, y, p.hex("#33220f")); });
+def("pine_leaves", p => { p.clear(); for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (p.r() < 0.82) p.px(x, y, [30 + p.r() * 25, 80 + p.r() * 35, 50 + p.r() * 25, 255]); });
+def("birch_side", p => { p.fill("#e8e4d8", 10); for (let i = 0; i < 7; i++) { const x = p.r() * 13 | 0, y = p.r() * 15 | 0; p.rect(x, y, x + 2 + (p.r() * 2 | 0), y, "#2a2a26"); } });
+def("birch_top", p => { p.fill("#d8c08a", 12); for (let a = 0; a < 6.28; a += 0.05) p.px(8 + Math.cos(a) * 7, 8 + Math.sin(a) * 7, p.hex("#e8e4d8")); for (let a = 0; a < 6.28; a += 0.08) p.px(8 + Math.cos(a) * 4, 8 + Math.sin(a) * 4, p.hex("#b89a60")); });
+def("birch_leaves", p => { p.clear(); for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (p.r() < 0.8) p.px(x, y, [100 + p.r() * 40, 160 + p.r() * 40, 60 + p.r() * 25, 255]); });
+def("gold_ore", p => { p.fill("#8b8d91", 22); p.spots("#f8d040", 6, 2); });
+def("azurite_ore", p => { p.fill("#8b8d91", 22); p.spots("#5ad8ff", 5, 2); p.spots("#1d74b0", 3, 1); });
+def("lava", p => { p.fill("#e8601a", 30); p.spots("#ffb030", 8, 2); p.spots("#c03010", 5, 2); });
+def("chest_side", p => { p.fill("#a8743a", 12); p.rect(0, 0, 15, 0, "#5a3a1a"); p.rect(0, 15, 15, 15, "#5a3a1a"); p.rect(0, 0, 0, 15, "#5a3a1a"); p.rect(15, 0, 15, 15, "#5a3a1a"); p.rect(0, 5, 15, 5, "#5a3a1a"); });
+def("chest_front", p => { p.fill("#a8743a", 12); p.rect(0, 0, 15, 0, "#5a3a1a"); p.rect(0, 15, 15, 15, "#5a3a1a"); p.rect(0, 0, 0, 15, "#5a3a1a"); p.rect(15, 0, 15, 15, "#5a3a1a"); p.rect(0, 5, 15, 5, "#5a3a1a"); p.rect(7, 4, 8, 7, "#d8d8e0"); p.rect(7, 7, 8, 7, "#5a5a66"); });
+def("chest_top", p => { p.fill("#b07a40", 12); p.rect(0, 0, 15, 0, "#5a3a1a"); p.rect(0, 15, 15, 15, "#5a3a1a"); p.rect(0, 0, 0, 15, "#5a3a1a"); p.rect(15, 0, 15, 15, "#5a3a1a"); });
+def("bed_top", p => { p.fill("#c02a2a", 14); p.rect(0, 0, 15, 4, "#f2f2f2", 8); p.rect(0, 5, 15, 5, "#8a1a1a"); });
+def("bed_side", p => { p.fill("#c02a2a", 14); p.rect(0, 12, 15, 15, "#a87a42", 10); p.rect(0, 7, 3, 11, "#f2f2f2", 6); });
+def("ladder", p => { p.clear(); p.rect(2, 0, 3, 15, "#9a6a34"); p.rect(12, 0, 13, 15, "#9a6a34"); for (let y = 2; y < 16; y += 4) p.rect(4, y, 11, y + 1, "#b8864a"); });
+def("wool", p => { p.fill("#ececec", 14); for (let i = 0; i < 30; i++) p.px(p.r() * 16, p.r() * 16, [210, 210, 210, 255]); });
+def("stonebricks", p => { p.fill("#8e8e92", 14); for (const y of [0, 8]) p.rect(0, y + 7, 15, y + 7, "#5a5a5e"); p.rect(7, 0, 7, 7, "#5a5a5e"); p.rect(0, 8, 0, 15, "#5a5a5e"); p.rect(11, 8, 11, 15, "#5a5a5e"); p.rect(1, 1, 6, 1, "#a8a8ac"); });
+def("pumpkin_side", p => { p.fill("#e08a1a", 14); for (let x = 1; x < 16; x += 4) p.rect(x, 0, x, 15, "#b8680a"); });
+def("pumpkin_top", p => { p.fill("#d07a14", 12); p.rect(7, 6, 9, 9, "#6a4a1a"); });
+def("pumpkin_face", p => { p.fill("#e08a1a", 14); for (let x = 1; x < 16; x += 4) p.rect(x, 0, x, 15, "#b8680a"); p.rect(3, 4, 5, 6, "#2a1404"); p.rect(10, 4, 12, 6, "#2a1404"); p.rect(4, 10, 11, 11, "#2a1404"); p.rect(5, 12, 10, 12, "#2a1404"); });
+def("lantern_face", p => { p.fill("#e08a1a", 14); for (let x = 1; x < 16; x += 4) p.rect(x, 0, x, 15, "#b8680a"); p.rect(3, 4, 5, 6, "#fff070"); p.rect(10, 4, 12, 6, "#fff070"); p.rect(4, 10, 11, 11, "#fff070"); p.rect(5, 12, 10, 12, "#ffd040"); });
+def("gold_block", p => { p.fill("#f0c830", 10); p.rect(0, 0, 15, 0, "#fff4a0"); p.rect(0, 0, 0, 15, "#fff4a0"); p.rect(0, 15, 15, 15, "#b88a10"); p.rect(15, 0, 15, 15, "#b88a10"); p.rect(3, 3, 6, 4, "#fff8c8"); });
+def("azurite_block", p => { p.fill("#3fc8f0", 10); p.rect(0, 0, 15, 0, "#c8f6ff"); p.rect(0, 0, 0, 15, "#c8f6ff"); p.rect(0, 15, 15, 15, "#1d74b0"); p.rect(15, 0, 15, 15, "#1d74b0"); for (let i = 2; i < 14; i += 4) p.rect(i, i, i + 1, i + 1, "#e8fdff"); });
 def("bricks", p => { p.fill("#a0503a", 18); for (let y = 0; y < 16; y += 4) { p.rect(0, y + 3, 15, y + 3, "#d8d0c0"); for (let x = (y / 4 % 2) * 4; x < 16; x += 8) p.rect(x, y, x, y + 2, "#d8d0c0"); } });
 
 /** [topo, base, lados, frente] para cada bloco. */
@@ -94,6 +125,28 @@ export function faceTiles(id, meta) {
     case 29: return [T.tallgrass, T.tallgrass, T.tallgrass];
     case 30: return [T.flower, T.flower, T.flower];
     case 31: return [T.bricks, T.bricks, T.bricks];
+    case 32: return [T.snow, T.dirt, T.snowy_side];
+    case 33: return [T.snow, T.snow, T.snow];
+    case 34: return [T.ice, T.ice, T.ice];
+    case 35: return [T.sandstone_top, T.sandstone_top, T.sandstone_side];
+    case 36: return [T.cactus_top, T.cactus_top, T.cactus_side];
+    case 37: return [T.deadbush, T.deadbush, T.deadbush];
+    case 38: return [T.log_top, T.log_top, T.pine_side];
+    case 39: return [T.pine_leaves, T.pine_leaves, T.pine_leaves];
+    case 40: return [T.birch_top, T.birch_top, T.birch_side];
+    case 41: return [T.birch_leaves, T.birch_leaves, T.birch_leaves];
+    case 42: return [T.gold_ore, T.gold_ore, T.gold_ore];
+    case 43: return [T.azurite_ore, T.azurite_ore, T.azurite_ore];
+    case 44: return [T.lava, T.lava, T.lava];
+    case 45: return [T.chest_top, T.chest_top, T.chest_side, T.chest_front];
+    case 46: return [T.bed_top, T.planks, T.bed_side];
+    case 47: return [T.ladder, T.ladder, T.ladder];
+    case 48: return [T.wool, T.wool, T.wool];
+    case 49: return [T.stonebricks, T.stonebricks, T.stonebricks];
+    case 50: return [T.pumpkin_top, T.pumpkin_top, T.pumpkin_side, T.pumpkin_face];
+    case 51: return [T.pumpkin_top, T.pumpkin_top, T.pumpkin_side, T.lantern_face];
+    case 52: return [T.gold_block, T.gold_block, T.gold_block];
+    case 53: return [T.azurite_block, T.azurite_block, T.azurite_block];
     default: return [T.stone, T.stone, T.stone];
   }
 }
@@ -111,36 +164,8 @@ export function buildAtlas() {
 }
 
 // ---------- Ícones ----------
-const MAT = { 0: ["#b8884e", "#7d5a30"], 1: ["#9a9ca0", "#5a5c60"], 2: ["#e8e8ee", "#9a9ca8"] };
-function drawItem(p, id) {
-  p.clear();
-  const it = ITEM[id];
-  if (it.tool) {
-    const [c, d] = MAT[(id % 5)] || MAT[0];
-    for (let i = 0; i < 10; i++) p.px(3 + i, 14 - i, p.hex("#7d5a30")), p.px(4 + i, 14 - i, p.hex("#5e4022"));
-    if (it.tool === "picareta") { for (let i = 0; i < 12; i++) p.px(3 + i, 2 + Math.abs(i - 6) * 0.45, p.hex(c)); for (let i = 0; i < 12; i++) p.px(3 + i, 3 + Math.abs(i - 6) * 0.45, p.hex(d)); }
-    if (it.tool === "machado") { p.rect(6, 1, 11, 6, c); p.rect(6, 6, 9, 7, d); }
-    if (it.tool === "pa") { p.rect(10, 1, 14, 5, c); p.rect(11, 5, 13, 6, d); }
-    if (it.tool === "espada") { for (let i = 0; i < 10; i++) { p.px(5 + i, 10 - i, p.hex(c)); p.px(6 + i, 10 - i, p.hex(c)); p.px(6 + i, 11 - i, p.hex(d)); } p.rect(2, 10, 6, 11, "#5e4022"); p.rect(4, 8, 5, 13, "#5e4022"); }
-    if (it.tool === "enxada") { p.rect(9, 2, 14, 3, c); p.rect(9, 4, 10, 5, d); }
-    return;
-  }
-  switch (id) {
-    case 100: for (let i = 0; i < 11; i++) { p.px(3 + i, 13 - i, p.hex("#9a7140")); p.px(4 + i, 13 - i, p.hex("#6e4b2a")); } break;
-    case 101: for (let y = 4; y < 13; y++) for (let x = 4; x < 13; x++) if ((x - 8) ** 2 + (y - 8.5) ** 2 < 18 + p.r() * 6) p.px(x, y, [30 + p.r() * 30, 30 + p.r() * 30, 34 + p.r() * 30, 255]); break;
-    case 102: p.rect(2, 7, 13, 11, "#d8d8e0", 14); p.rect(3, 6, 12, 6, "#ffffff"); p.rect(2, 11, 13, 11, "#8a8a96"); break;
-    case 103: for (let i = 0; i < 40; i++) p.px(3 + p.r() * 10, 6 + p.r() * 8, [63, 200 + p.r() * 55, 255, 255]); break;
-    case 104: for (let x = 3; x < 14; x += 3) { p.rect(x, 3, x, 14, "#d9b84a"); p.rect(x - 1, 2, x + 1, 5, "#e8cb5e"); } break;
-    case 105: for (let i = 0; i < 9; i++) { const x = 3 + p.r() * 10, y = 5 + p.r() * 8; p.rect(x | 0, y | 0, (x | 0) + 1, y | 0, "#7a9a3a"); } break;
-    case 106: for (let i = 0; i < 9; i++) p.rect(4 + i, 12 - i, 6 + i, 13 - i, "#f08a24"); p.rect(11, 1, 14, 4, "#4f9a2f"); break;
-    case 107: for (let y = 6; y < 13; y++) for (let x = 2; x < 14; x++) if (((x - 8) / 6) ** 2 + ((y - 9.5) / 3.6) ** 2 < 1) p.px(x, y, p.hex(y < 9 ? "#c88a3a" : "#a86a2a")); break;
-    case 108: case 109: { const c = id === 108 ? "#e88a8a" : "#9a5a2a"; for (let y = 4; y < 13; y++) for (let x = 3; x < 13; x++) if ((x - 8) ** 2 / 25 + (y - 8) ** 2 / 14 < 1) p.px(x, y, p.hex(c)); p.rect(11, 11, 14, 12, "#f0e8d8"); break; }
-    case 111: for (let y = 5; y < 13; y++) for (let x = 3; x < 13; x++) if ((x - 8) ** 2 + (y - 9) ** 2 < 20) p.px(x, y, [130 + p.r() * 20, 140 + p.r() * 20, 160, 255]); break;
-    default: p.rect(4, 4, 11, 11, "#ff3fd8");
-  }
-}
-
-const ICON_TILE = { 16: "torch", 18: "wheat3", 19: "carrot3", 20: "sapling", 23: "lever", 24: "button", 27: "door", 29: "tallgrass", 30: "flower" };
+const ICON_TILE = { 16: "torch", 18: "wheat3", 19: "carrot3", 20: "sapling", 23: "lever", 24: "button", 27: "door", 29: "tallgrass", 30: "flower", 37: "deadbush", 47: "ladder" };
+const ISO = new Set(["cube", "chest", "cactus", "bed"]);
 const iconCache = new Map();
 /** URL (data:) do ícone do item ou bloco. Blocos cúbicos aparecem em perspectiva. */
 export function iconURL(id, atlas) {
@@ -150,11 +175,12 @@ export function iconURL(id, atlas) {
   if (id >= 100) {
     const c16 = document.createElement("canvas"); c16.width = c16.height = 16;
     const gg = c16.getContext("2d"), img = gg.createImageData(16, 16);
-    drawItem(painter(img, id * 31), id); gg.putImageData(img, 0, 0);
+    if (!drawItemSprite(img, id, ITEM[id])) { const p = painter(img, id); p.rect(4, 4, 11, 11, "#ff3fd8"); }
+    gg.putImageData(img, 0, 0);
     g.drawImage(c16, 0, 0, 32, 32);
   } else {
     const tileXY = t => [(t % ATLAS_COLS) * 16, Math.floor(t / ATLAS_COLS) * 16];
-    if (ICON_TILE[id] || BLOCKS[id].shape !== "cube") {
+    if (ICON_TILE[id] || !ISO.has(BLOCKS[id].shape)) {
       const [x, y] = tileXY(T[ICON_TILE[id]] ?? faceTiles(id, 0)[2]); g.drawImage(atlas, x, y, 16, 16, 0, 0, 32, 32);
     } else {
       const [top, , side, front] = faceTiles(id, 0);
