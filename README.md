@@ -55,6 +55,12 @@ Para iniciar junto com o Windows: `Win + R` → `shell:startup` → cole ali um 
 - **Modo demonstração:** sem dongle, um simulador gera sinais de teste (FM, aviação, APRS, DTMF, controle 433, ADS-B, satélite, TV, WWV).
 - Gravações: `Output\Rádio` (áudio), `Output\SDR\IQ`, `Output\SDR\Capturas`, `Output\SDR\Logs`, `Output\Satélites`.
 
+## Chat
+
+- Botão **💬 Chat** no topo (em qualquer ferramenta): conversa **Geral** com todos os aparelhos conectados e **privada** com cada um.
+- Cada aparelho define o próprio nome; a identidade fica salva no navegador (e protegida por uma chave, ninguém se passa por outro).
+- Histórico salvo no servidor (últimas 300 mensagens por conversa), contador de não lidas, aviso sonoro e notificação.
+
 ## Acesso pela rede
 
 - Outros PCs/celulares da mesma rede abrem `http://<IP do PC>:3098` (o endereço aparece na janela do servidor e no botão **🌐 Rede**).

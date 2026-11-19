@@ -21,6 +21,7 @@ import { hub } from "./lib/sdr/hub.mjs";
 import * as sdrInstall from "./lib/sdr/install.mjs";
 import * as sats from "./lib/sdr/sat.mjs";
 import * as clock from "./lib/clock.mjs";
+import { attachChat } from "./lib/chat.mjs";
 
 const PORT = Number(process.env.TOOLBOX_PORT) || 3098;
 const HOST = "0.0.0.0"; // aceita conexões da rede local (ver lib/access.mjs)
@@ -384,7 +385,11 @@ const httpServer = app.listen(PORT, HOST, () => {
 
 // WebSocket do rádio SDR (espectro, áudio, eventos). Mesma regra de acesso das páginas.
 const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
+// WebSocket do chat entre os aparelhos conectados
+const chatWss = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 });
 httpServer.on("upgrade", (req, socket, head) => {
-  if (!req.url.startsWith("/ws/sdr") || !access.allowUpgrade(req)) { socket.destroy(); return; }
-  wss.handleUpgrade(req, socket, head, ws => hub.attach(ws, req));
+  if (!access.allowUpgrade(req)) { socket.destroy(); return; }
+  if (req.url.startsWith("/ws/sdr")) wss.handleUpgrade(req, socket, head, ws => hub.attach(ws, req));
+  else if (req.url.startsWith("/ws/chat")) chatWss.handleUpgrade(req, socket, head, ws => attachChat(ws, req));
+  else socket.destroy();
 });

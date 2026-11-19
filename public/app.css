@@ -80,3 +80,27 @@ body.full .layout { padding: 0; }
 #lanWin .window-body { display: flex; flex-direction: column; gap: 8px; }
 #lanUrls { margin: 0 0 0 18px; padding: 0; font-family: "Courier New", monospace; font-size: 13px; }
 #lanUrls a { color: #000080; }
+
+/* ---------- Chat ---------- */
+#chatWin { position: fixed; right: 12px; bottom: 40px; width: min(560px, calc(100vw - 24px)); height: min(460px, calc(100vh - 110px)); z-index: 90; display: flex; flex-direction: column; }
+#chatWin[hidden] { display: none; }
+#chatWin .window-body { flex: 1; display: flex; flex-direction: column; gap: 6px; min-height: 0; margin: 4px; }
+.chat-me { display: flex; gap: 6px; align-items: center; }
+.chat-me input { width: 160px; }
+.chat-main { flex: 1; display: flex; gap: 6px; min-height: 0; }
+.chat-users { width: 165px; flex: none; margin: 0; padding: 2px; list-style: none; overflow-y: auto; background: #fff; }
+.chat-users li { padding: 3px 4px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-users li small { display: block; color: #777; font-size: 10px; margin-left: 14px; overflow: hidden; text-overflow: ellipsis; }
+.chat-users li:hover { background: #dcdcf0; }
+.chat-users li.sel { background: #000080; color: #fff; } .chat-users li.sel small { color: #ccd; }
+.chat-users .dot { color: #999; font-size: 10px; } .chat-users .dot.on { color: #0a0; }
+.badge { background: #c00; color: #fff; border-radius: 8px; padding: 0 5px; font-size: 10px; }
+.chat-conv { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.chat-msgs { flex: 1; overflow-y: auto; background: #fff; padding: 4px 6px; }
+.chat-msgs .msg { margin: 3px 0; padding: 3px 6px; background: #f0f0f0; border: 1px solid #ddd; max-width: 88%; overflow-wrap: anywhere; }
+.chat-msgs .msg.mine { background: #e2e8ff; margin-left: auto; }
+.chat-msgs .msg .t { color: #888; font-size: 10px; }
+.chat-msgs .day { text-align: center; color: #888; font-size: 10px; margin: 6px 0 2px; }
+.chat-form { display: flex; gap: 4px; }
+.chat-form input { flex: 1; }
+@media (max-width: 560px) { .chat-users { width: 110px; } }
