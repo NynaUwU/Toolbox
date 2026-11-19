@@ -78,7 +78,7 @@ Para iniciar junto com o Windows: `Win + R` → `shell:startup` → cole ali um 
   - **8 armas** (Blaster, Cannon, Frost, Tesla, Sniper, Flamer, Missile, Laser), cada uma com 5 tiers; construir, melhorar e vender a qualquer momento, inclusive durante a wave.
   - **Moedas:** os inimigos soltam moedas que somem em poucos segundos — passe o mouse por cima para coletar.
   - **Loja entre as waves:** armas novas, novos tiers e melhorias da run (dano, cadência, alcance, juros, ímã…), com ofertas aleatórias e troca paga.
-  - **9 inimigos** (voadores, blindados, escudos, curandeiros, divisores) e um chefe a cada 10 waves.
+  - **11 inimigos**, um novo a cada 5 waves (Grunt e Scout no começo; Swarm na 5, Brute na 10, Flyer na 15, Warden na 20, Mender na 25, Splitter na 30, Juggernaut na 35, Phaser na 40, Wraith na 45) e um chefe a cada 10 waves.
   - **Laboratório:** ao perder, a run recomeça e você ganha ◆ Data para upgrades permanentes — caros de propósito (o 1º nível custa mais ou menos uma run mediana). Salvo no servidor, por aparelho (`data\saves`).
 
 ## Chat

@@ -32,16 +32,19 @@ const ROMAN = ["", "I", "II", "III", "IV", "V"];
 // Inimigos. cost = peso no orçamento da wave · from = wave em que aparece
 const ENEMY = {
   grunt: { name: "Grunt", hp: 30, speed: 46, reward: 3, armor: 0, r: 7, cost: 1, from: 1, color: "#d84a3a", desc: "comum" },
-  scout: { name: "Scout", hp: 18, speed: 88, reward: 2, armor: 0, r: 6, cost: 0.8, from: 2, color: "#f0c83a", desc: "rápido e frágil" },
-  swarm: { name: "Swarm", hp: 8, speed: 64, reward: 1, armor: 0, r: 4, cost: 0.3, from: 3, color: "#5ac83a", group: 5, desc: "vem em bando" },
-  brute: { name: "Brute", hp: 120, speed: 30, reward: 8, armor: 4, r: 10, cost: 3, from: 4, color: "#5a5a64", desc: "lento e blindado (tira 2 vidas)" },
-  flyer: { name: "Flyer", hp: 40, speed: 52, reward: 5, armor: 0, r: 7, cost: 2, from: 5, color: "#e8f0ff", air: true, desc: "voa em linha reta; só armas antiaéreas" },
-  shield: { name: "Warden", hp: 60, speed: 44, reward: 6, armor: 0, r: 8, cost: 2.5, from: 7, color: "#8a4ad8", shield: 60, desc: "escudo que se regenera" },
-  healer: { name: "Mender", hp: 50, speed: 41, reward: 7, armor: 0, r: 8, cost: 2.5, from: 9, color: "#f07ab8", desc: "cura quem está perto" },
-  splitter: { name: "Splitter", hp: 80, speed: 39, reward: 5, armor: 1, r: 9, cost: 2.5, from: 11, color: "#f0902a", desc: "vira 3 Swarms ao morrer" },
-  boss: { name: "Overlord", hp: 1500, speed: 23, reward: 80, armor: 6, r: 16, cost: 0, from: 10, color: "#a01830", boss: true, desc: "chefe a cada 10 waves (tira 5 vidas)" },
+  scout: { name: "Scout", hp: 18, speed: 84, reward: 2, armor: 0, r: 6, cost: 0.8, from: 1, color: "#f0c83a", desc: "rápido e frágil" },
+  swarm: { name: "Swarm", hp: 8, speed: 62, reward: 1, armor: 0, r: 4, cost: 0.3, from: 5, color: "#5ac83a", group: 5, desc: "vem em bando" },
+  brute: { name: "Brute", hp: 120, speed: 30, reward: 8, armor: 4, r: 10, cost: 3, from: 10, color: "#5a5a64", lives: 2, desc: "lento e blindado (tira 2 vidas)" },
+  flyer: { name: "Flyer", hp: 40, speed: 50, reward: 5, armor: 0, r: 7, cost: 2, from: 15, color: "#e8f0ff", air: true, desc: "voa em linha reta; só armas antiaéreas" },
+  shield: { name: "Warden", hp: 60, speed: 42, reward: 6, armor: 0, r: 8, cost: 2.5, from: 20, color: "#8a4ad8", shield: 60, desc: "escudo que se regenera" },
+  healer: { name: "Mender", hp: 50, speed: 40, reward: 7, armor: 0, r: 8, cost: 2.5, from: 25, color: "#f07ab8", desc: "cura quem está perto" },
+  splitter: { name: "Splitter", hp: 80, speed: 38, reward: 5, armor: 1, r: 9, cost: 2.5, from: 30, color: "#f0902a", desc: "vira 3 Swarms ao morrer" },
+  juggernaut: { name: "Juggernaut", hp: 420, speed: 20, reward: 22, armor: 12, r: 13, cost: 6, from: 35, color: "#4a4630", lives: 3, desc: "blindagem pesada (tira 3 vidas)" },
+  phaser: { name: "Phaser", hp: 90, speed: 40, reward: 9, armor: 0, r: 8, cost: 3, from: 40, color: "#3af0c8", desc: "teleporta para frente de tempos em tempos" },
+  wraith: { name: "Wraith", hp: 150, speed: 62, reward: 12, armor: 0, r: 9, cost: 4, from: 45, color: "#b8a8ff", air: true, shield: 100, desc: "voador rápido com escudo" },
+  boss: { name: "Overlord", hp: 1500, speed: 23, reward: 80, armor: 6, r: 16, cost: 0, from: 10, color: "#a01830", boss: true, lives: 5, desc: "chefe a cada 10 waves (tira 5 vidas)" },
 };
-const hpMul = w => Math.pow(1.1, w - 1) * (1 + 0.04 * (w - 1));
+const hpMul = w => Math.pow(1.07, w - 1) * (1 + 0.03 * (w - 1));
 const rewardMul = w => 1 + 0.05 * (w - 1);
 
 // Melhorias da run (loja)
@@ -70,7 +73,7 @@ const META = {
   veteran: { name: "Veteran Crews", eff: l => `armas liberadas começam com +${l} no teto de tier`, cost: [260, 600] },
 };
 
-// calibrado com simulações: um jogador mediano chega perto da wave 20 e ganha ~240 ◆ — o 1º nível custa quase isso
+// calibrado: uma run mediana (wave ~15–20) rende ~100–170 ◆ — o 1º nível de cada upgrade custa de 110 a 420
 for (const u of Object.values(META)) u.cost = u.cost.map(c => Math.round(c * 1.6 / 10) * 10);
 
 // ======================= Save permanente =======================
@@ -251,12 +254,15 @@ function drawEnemy(g, e, x, y) {
   g.fillStyle = e.hitFlash > 0 ? "#ffffff" : d.color;
   g.beginPath();
   if (e.type === "scout") { g.moveTo(x + r, y); g.lineTo(x - r, y - r); g.lineTo(x - r * 0.5, y); g.lineTo(x - r, y + r); g.closePath(); }
-  else if (e.type === "brute") g.rect(x - r, y - r, r * 2, r * 2);
+  else if (e.type === "brute" || e.type === "juggernaut") g.rect(x - r, y - r, r * 2, r * 2);
+  else if (e.type === "phaser") { g.moveTo(x + r, y); g.lineTo(x, y - r); g.lineTo(x - r, y); g.lineTo(x, y + r); g.closePath(); }
   else if (e.type === "splitter") { for (let i = 0; i < 6; i++) { const a = i * Math.PI / 3; g[i ? "lineTo" : "moveTo"](x + Math.cos(a) * r, y + Math.sin(a) * r); } g.closePath(); }
-  else if (e.type === "flyer") { g.moveTo(x + r, y); g.lineTo(x - r * 0.4, y - r * 1.4); g.lineTo(x - r * 0.6, y); g.lineTo(x - r * 0.4, y + r * 1.4); g.closePath(); }
+  else if (e.type === "flyer" || e.type === "wraith") { g.moveTo(x + r, y); g.lineTo(x - r * 0.4, y - r * 1.4); g.lineTo(x - r * 0.6, y); g.lineTo(x - r * 0.4, y + r * 1.4); g.closePath(); }
   else g.arc(x, y, r, 0, 7);
   g.fill(); outline();
   if (e.type === "brute") { g.fillStyle = "#8a8a94"; g.fillRect(x - r + 2, y - r + 2, r * 2 - 4, 3); }
+  if (e.type === "juggernaut") { g.fillStyle = "#e8c83a"; for (let i = -r + 3; i < r - 2; i += 6) g.fillRect(x + i, y - 2, 3, 4); g.fillStyle = "#8a8670"; g.fillRect(x - r + 2, y - r + 2, r * 2 - 4, 3); }
+  if (e.type === "phaser") { g.fillStyle = "#ffffff"; g.fillRect(x - 1, y - 3, 2, 6); }
   if (e.type === "healer") { g.fillStyle = "#fff"; g.fillRect(x - 1.5, y - 5, 3, 10); g.fillRect(x - 5, y - 1.5, 10, 3); }
   if (e.type === "grunt" || e.type === "boss" || e.type === "shield") { g.fillStyle = "#000"; g.fillRect(x + r * 0.2, y - r * 0.35, 2, 2); g.fillRect(x + r * 0.2, y + r * 0.15, 2, 2); }
   if (e.type === "boss") { g.fillStyle = "#f0c830"; for (let i = -1; i <= 1; i++) { g.beginPath(); g.moveTo(x + i * 6 - 4, y - r + 2); g.lineTo(x + i * 6, y - r - 7); g.lineTo(x + i * 6 + 4, y - r + 2); g.fill(); } }
@@ -315,12 +321,12 @@ function stats(t) {
 // ---------- Waves ----------
 function makeWave(w) {
   const list = [];
-  let budget = 8 + w * 5 + Math.pow(w, 1.45);
+  let budget = 8 + w * 4 + Math.pow(w, 1.3);
   if (w % 10 === 0) { list.push({ type: "boss", gap: 2.5, big: 1 + (w / 10 - 1) * 0.15 }); budget *= 0.6; }
   const pool = Object.entries(ENEMY).filter(([k, e]) => e.from <= w && k !== "boss");
   const rnd = Math.random;
   while (budget > 0.3) {
-    const weights = pool.map(([k]) => (k === "grunt" ? 3 : 1.6));
+    const weights = pool.map(([k, e]) => (k === "grunt" ? 3 : w - e.from < 5 ? 2.4 : 1.6)); // o inimigo novo aparece bastante na estreia
     let r = rnd() * weights.reduce((a, b) => a + b, 0), pick = pool[0];
     for (let i = 0; i < pool.length; i++) { r -= weights[i]; if (r <= 0) { pick = pool[i]; break; } }
     const [k, e] = pick, n = e.group || (rnd() < 0.5 ? 2 : 3);
@@ -334,13 +340,14 @@ function startWave() {
   if (!run || run.waveActive || run.over) return;
   closeDlg("dShop");
   run.wave++; run.waveActive = true; run.queue = run.next.slice(); run.spawnT = 1;
-  banner(`Wave ${run.wave}${run.wave % 10 === 0 ? " — CHEFE!" : ""}`);
+  const fresh = Object.values(ENEMY).filter(e => e.from === run.wave && !e.boss && run.wave > 1).map(e => e.name);
+  banner(`Wave ${run.wave}${run.wave % 10 === 0 ? " — CHEFE!" : ""}${fresh.length ? ` — novo: ${fresh.join(", ")}` : ""}`);
   drawWavePanel(); updateStatus();
 }
 function spawn(item) {
   const d = ENEMY[item.type], w = run.wave, hp = d.hp * hpMul(w) * (item.big || 1) * (item.big ? 1 + (item.big - 1) * 3 : 1);
-  const e = { type: item.type, hp, maxHp: hp, shield: (d.shield || 0) * hpMul(w), maxShield: (d.shield || 0) * hpMul(w) || 1, speed: d.speed * (1 + 0.01 * w),
-    armor: d.armor * (1 + 0.05 * w), air: !!d.air, boss: !!d.boss, d: item.d || 0, slow: 0, slowT: 0, lastHit: -9, healT: 1, hitFlash: 0, big: item.big || 1,
+  const e = { type: item.type, hp, maxHp: hp, shield: (d.shield || 0) * hpMul(w), maxShield: (d.shield || 0) * hpMul(w) || 1, speed: d.speed * (1 + 0.005 * w),
+    armor: d.armor * (1 + 0.03 * w), air: !!d.air, boss: !!d.boss, d: item.d || 0, slow: 0, slowT: 0, lastHit: -9, healT: 1, hitFlash: 0, big: item.big || 1,
     reward: d.reward * rewardMul(w), x: 0, y: 0 };
   placeEnemy(e); run.enemies.push(e); return e;
 }
@@ -388,6 +395,7 @@ function step(dt) {
     e.hitFlash -= dt;
     if (e.slowT > 0) { e.slowT -= dt; if (e.slowT <= 0) e.slow = 0; }
     e.d += e.speed * (1 - e.slow) * dt;
+    if (e.type === "phaser" && (e.blinkT = (e.blinkT ?? 3) - dt) <= 0) { e.blinkT = 3; run.fx.push({ k: "pop", x: e.x, y: e.y, t: 0.3, max: 0.3, r: 8, c: "#3af0c8" }); e.d += 72; }
     placeEnemy(e);
     if (e.maxShield > 1 && time - e.lastHit > 2) e.shield = Math.min(e.maxShield, e.shield + e.maxShield * 0.25 * dt);
     if (e.type === "healer" && (e.healT -= dt) <= 0) {
@@ -397,7 +405,7 @@ function step(dt) {
     }
     if ((e.air ? e.d >= m.fly.len : e.d >= m.total)) {
       e.dead = true; e.leaked = true;
-      const loss = e.boss ? 5 : e.type === "brute" ? 2 : 1;
+      const loss = ENEMY[e.type].lives || 1;
       run.lives -= loss; run.leaked += loss;
       run.fx.push({ k: "flash", t: 0.25, max: 0.25 });
       if (run.lives <= 0) { run.lives = 0; gameOver(); return; }
@@ -599,13 +607,14 @@ function saveMetaSoon() { clearTimeout(saveT); saveT = setTimeout(saveMeta, 500)
 function gameOver(giveUp = false) {
   if (!run || run.over) return;
   run.over = true; run.waveActive = false; run.fx = []; run.shots = [];
-  const cleared = Math.max(0, run.wave - 1), waveData = cleared * (cleared + 1) / 2, bossData = 20 * run.bosses, killData = Math.floor(run.kills / 50);
+  const cleared = Math.max(0, run.wave - 1), bossData = 20 * run.bosses, killData = Math.floor(run.kills / 50);
+  let waveData = 0; for (let i = 1; i <= cleared; i++) waveData += 3 + Math.floor(i / 3); // cada wave vale 3 ◆ + 1 a cada 3 waves de profundidade
   const total = waveData + bossData + killData;
   meta.data += total; meta.runs++; meta.kills += run.kills; meta.best = Math.max(meta.best, cleared);
   saveMeta();
   $("overWhy").textContent = giveUp ? `Você desistiu na wave ${run.wave}.` : `Caiu na wave ${run.wave} (mapa ${run.map.theme.name}).`;
   const rows = [["Waves completas", cleared], ["Inimigos destruídos", run.kills], ["Chefes derrotados", run.bosses], ["Dinheiro coletado", `$${Math.floor(run.earned)}`],
-    ["◆ pelas waves (1+2+…)", waveData], ["◆ pelos chefes (20 cada)", bossData], ["◆ pelas mortes (1 a cada 50)", killData]];
+    ["◆ pelas waves (3 + 1 a cada 3 waves)", waveData], ["◆ pelos chefes (20 cada)", bossData], ["◆ pelas mortes (1 a cada 50)", killData]];
   $("overSum").replaceChildren(...rows.flatMap(([a, b]) => { const s = document.createElement("span"); s.textContent = a; const v = document.createElement("b"); v.textContent = b; return [s, v]; }));
   $("overData").innerHTML = `Você ganhou <b>◆ ${total} Data</b>. Total: <b>◆ ${meta.data}</b>.`;
   closeAll(); openDlg("dOver"); updateStatus();
@@ -617,10 +626,14 @@ function drawLab() {
     const l = lv(k), max = u.cost.length, tr = document.createElement("tr");
     const price = l < max ? u.cost[l] : null;
     const td = (txt, cls) => { const c = document.createElement("td"); c.textContent = txt; if (cls) c.className = cls; return c; };
-    const btn = document.createElement("button"); btn.textContent = price == null ? "Máximo" : "Comprar"; btn.disabled = price == null || meta.data < price;
+    const btn = document.createElement("button"); btn.textContent = price == null ? "Máximo" : `Comprar ◆ ${price}`; btn.disabled = price == null || meta.data < price;
     btn.onclick = () => { if (price == null || meta.data < price) return; meta.data -= price; meta.lv[k] = l + 1; saveMeta(); drawLab(); updateStatus(); };
     const b = document.createElement("td"); b.append(btn);
-    tr.append(td(u.name), td("■".repeat(l) + "□".repeat(max - l), "lv"), td(`${u.eff(l)}${l < max ? ` → ${u.eff(l + 1)}` : ""}`), td(price == null ? "—" : `◆ ${price}`), b);
+    const eff = document.createElement("td"); eff.className = "eff";
+    const now = document.createElement("div"); now.textContent = `Agora: ${u.eff(l)}`;
+    eff.append(now);
+    if (l < max) { const nx = document.createElement("div"); nx.className = "next"; nx.textContent = `Próximo: ${u.eff(l + 1)}`; eff.append(nx); }
+    tr.append(td(u.name), td("■".repeat(l) + "□".repeat(max - l), "lv"), eff, b);
     return tr;
   }));
 }
@@ -689,7 +702,8 @@ function drawWavePanel() {
   const counts = {};
   for (const it of run.next || []) counts[it.type] = (counts[it.type] || 0) + 1;
   $("waveLegend").textContent = run.waveActive ? `Wave ${run.wave} em andamento` : `Próxima: wave ${run.wave + 1}`;
-  $("wavePrev").replaceChildren(...Object.entries(counts).map(([k, n]) => { const s = document.createElement("span"); s.title = `${ENEMY[k].name}: ${ENEMY[k].desc}`; const im = new Image(); im.src = iconOf("e", k); s.append(im, `×${n}`); return s; }));
+  const nw = run.waveActive ? run.wave : run.wave + 1;
+  $("wavePrev").replaceChildren(...Object.entries(counts).map(([k, n]) => { const s = document.createElement("span"); s.title = `${ENEMY[k].name}: ${ENEMY[k].desc}`; const im = new Image(); im.src = iconOf("e", k); s.append(im, `×${n}${ENEMY[k].from === nw && nw > 1 && !ENEMY[k].boss ? " NOVO" : ""}`); return s; }));
   $("btnWave").textContent = run.waveActive ? `Wave ${run.wave}…` : `▶ Iniciar wave ${run.wave + 1}`;
   $("btnWave").disabled = run.waveActive || run.over;
   $("btnShop").disabled = run.waveActive || run.over || !shop.offers.length;

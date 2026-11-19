@@ -65,11 +65,13 @@
   .card .price { font-weight: bold; align-self: flex-end; }
   .card.sold { opacity: .5; }
   .card.cant .price { color: #a00000; }
-  table.lab { width: 100%; border-collapse: collapse; background: #fff; }
+  table.lab { width: 100%; border-collapse: collapse; background: #fff; table-layout: fixed; }
+  table.lab col.c1 { width: 118px; } table.lab col.c2 { width: 70px; } table.lab col.c4 { width: 112px; }
+  table.lab .eff { line-height: 1.35; overflow-wrap: anywhere; } table.lab .eff .next { color: #000080; }
   table.lab td, table.lab th { padding: 3px 6px; text-align: left; border-bottom: 1px solid #dfdfdf; vertical-align: middle; }
   table.lab th { background: #c0c0c0; box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff; font-weight: normal; }
   table.lab .lv { font-family: monospace; letter-spacing: 1px; color: #000080; white-space: nowrap; }
-  table.lab button { min-width: 70px; }
+  table.lab button { min-width: 0; width: 100%; padding: 0 4px; white-space: nowrap; }
   .summary { display: grid; grid-template-columns: auto auto; gap: 2px 16px; margin: 6px 0; }
   .summary b { text-align: right; }
   .datatot { font-size: 13px; margin-top: 6px; }
@@ -181,7 +183,7 @@
     <div class="title-bar"><div class="title-bar-text">Laboratório — upgrades permanentes</div><div class="title-bar-controls"><button aria-label="Close" data-close="dLab"></button></div></div>
     <div class="window-body">
       <div class="msgbox"><div class="infoico">i</div><div><p id="labData"></p><p>Os upgrades valem para todas as próximas runs. Cada nível fica bem mais caro que o anterior.</p></div></div>
-      <div class="sunken-panel" style="max-height:340px;overflow:auto;margin-top:6px"><table class="lab"><thead><tr><th>Upgrade</th><th>Nível</th><th>Efeito</th><th>Preço</th><th></th></tr></thead><tbody id="labRows"></tbody></table></div>
+      <div class="sunken-panel" style="max-height:min(360px, calc(100vh - 230px));overflow-y:auto;overflow-x:hidden;margin-top:6px"><table class="lab"><colgroup><col class="c1"><col class="c2"><col><col class="c4"></colgroup><thead><tr><th>Upgrade</th><th>Nível</th><th>Efeito</th><th></th></tr></thead><tbody id="labRows"></tbody></table></div>
       <div class="buttons"><span class="grow" id="labStats"></span><button data-close="dLab">Fechar</button><button class="default" data-act="newnow">Nova run</button></div>
     </div>
   </div>
