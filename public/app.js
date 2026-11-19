@@ -3,7 +3,7 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // Ordem e ícones das categorias (categorias novas vindas do meta.json entram no fim)
 const CATEGORY_ORDER = ["Eletrônica", "Rádio (RTL-SDR)", "Edição de mídia", "Mídia e arquivos", "Conversores", "Sistema e rede", "Utilitários", "Outras ferramentas", "Meus sites", "Atalhos"];
-const CATEGORY_ICON = { "Eletrônica": "⚡", "Rádio (RTL-SDR)": "📡", "Edição de mídia": "🖌️", "Mídia e arquivos": "🎞️", "Conversores": "🔄", "Sistema e rede": "🖥️", "Utilitários": "🧩", "Outras ferramentas": "🛠️", "Meus sites": "🌐", "Atalhos": "🔗" };
+const CATEGORY_ICON = { "Jogos": "🎮", "Eletrônica": "⚡", "Rádio (RTL-SDR)": "📡", "Edição de mídia": "🖌️", "Mídia e arquivos": "🎞️", "Conversores": "🔄", "Sistema e rede": "🖥️", "Utilitários": "🧩", "Outras ferramentas": "🛠️", "Meus sites": "🌐", "Atalhos": "🔗" };
 function categories(list) {
   const names = [...new Set(list.map(i => i.category))];
   const rank = c => (CATEGORY_ORDER.indexOf(c) + 1) || 99;
@@ -12,6 +12,15 @@ function categories(list) {
 }
 
 let items = [];
+// Modo jogo: tema escuro hi-tech e a barra lateral passa a listar só os jogos
+const GAME_CAT = "Jogos";
+let gameMode = (() => { try { return localStorage.getItem("game-mode") === "1"; } catch { return false; } })();
+const visibleItems = () => items.filter(i => (i.category === GAME_CAT) === gameMode);
+function applyMode() {
+  document.body.classList.toggle("game", gameMode);
+  $("#btn-game").innerHTML = gameMode ? "🧰 Modo ferramentas" : "🎮 Modo jogo";
+  $(".sidebar .title-bar-text").textContent = gameMode ? "🎮 Jogos" : "Programas";
+}
 let lastVersion = null;
 
 async function getJSON(url, opts) {
@@ -29,7 +38,7 @@ function renderNav() {
   const q = $("#search").value.trim().toLowerCase();
   const match = i => !q || `${i.title} ${i.description}`.toLowerCase().includes(q);
   const current = location.hash.slice(1);
-  $("#nav").innerHTML = categories(items.filter(match)).map(([label, list]) => {
+  $("#nav").innerHTML = categories(visibleItems().filter(match)).map(([label, list]) => {
     return `<h3>${CATEGORY_ICON[label] || "📁"} ${esc(label)}</h3>` + list.map(i =>
       `<a href="${href(i)}" ${attrs(i)}
           class="${current === i.url ? "active" : ""}" title="${esc(i.description)}">
@@ -39,7 +48,7 @@ function renderNav() {
 
 function renderHome() {
   $("#main-title").textContent = "Início";
-  $("#main-body").innerHTML = `<div class="home">` + categories(items).map(([label, list]) => {
+  $("#main-body").innerHTML = `<div class="home">` + (gameMode ? `<p class="game-intro">◢ MODO JOGO — escolha um jogo. Seu aparelho joga com os outros da rede.</p>` : "") + categories(visibleItems()).map(([label, list]) => {
     return `<h2>${CATEGORY_ICON[label] || "📁"} ${esc(label)}</h2><div class="tiles">` + list.map(i =>
       `<a class="tile" href="${href(i)}" ${attrs(i)}>
         <span class="ico">${esc(i.icon)}</span><b>${esc(i.title)}${i.external || i.window ? " ↗" : ""}</b>
@@ -65,6 +74,13 @@ function route() {
 }
 
 $("#search").addEventListener("input", renderNav);
+$("#btn-game").onclick = () => {
+  gameMode = !gameMode;
+  try { localStorage.setItem("game-mode", gameMode ? "1" : "0"); } catch {}
+  applyMode();
+  const cur = items.find(i => i.url === location.hash.slice(1));
+  if (cur && (cur.category === GAME_CAT) !== gameMode) location.hash = "/"; else route();
+};
 $("#btn-close").onclick = () => { location.hash = "/"; };
 $("#btn-max").onclick = () => document.body.classList.toggle("full");
 addEventListener("hashchange", route);
@@ -105,6 +121,11 @@ async function pollStatus() {
 
 // ---------- Início ----------
 items = (await getJSON("/api/catalog")).items;
+{ // abrir um jogo direto pelo link já liga o modo jogo
+  const cur = items.find(i => i.url === location.hash.slice(1));
+  if (cur && cur.category === GAME_CAT) gameMode = true;
+}
+applyMode();
 route();
 pollStatus();
 setInterval(pollStatus, 15000);

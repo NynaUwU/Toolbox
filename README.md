@@ -55,6 +55,13 @@ Para iniciar junto com o Windows: `Win + R` → `shell:startup` → cole ali um 
 - **Modo demonstração:** sem dongle, um simulador gera sinais de teste (FM, aviação, APRS, DTMF, controle 433, ADS-B, satélite, TV, WWV).
 - Gravações: `Output\Rádio` (áudio), `Output\SDR\IQ`, `Output\SDR\Capturas`, `Output\SDR\Logs`, `Output\Satélites`.
 
+## Modo jogo e NetCyties
+
+- Botão **🎮 Modo jogo** no topo: tema escuro hi-tech e a barra lateral passa a mostrar só os jogos (🧰 volta às ferramentas).
+- **NetCyties**: city builder isométrico — cada aparelho da rede (cada IP) é dono de uma cidade e só ele pode construir nela; as outras podem ser visitadas.
+  Ruas, zonas residencial/comercial/industrial, parques, usina, demolir, expandir terreno, impostos e demanda RCI; a simulação roda no servidor (1 mês a cada 3 s).
+  No **mapa da rede**, o roteador fica no centro e cada cidade se liga a ele por uma avenida (outras sub-redes passam por um nó próprio); ligar as ruas à entrada **AV** dá comércio com a rede.
+
 ## Chat
 
 - Botão **💬 Chat** no topo (em qualquer ferramenta): conversa **Geral** com todos os aparelhos conectados e **privada** com cada um.

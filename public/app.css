@@ -104,3 +104,34 @@ body.full .layout { padding: 0; }
 .chat-form { display: flex; gap: 4px; }
 .chat-form input { flex: 1; }
 @media (max-width: 560px) { .chat-users { width: 110px; } }
+
+/* ================= Modo jogo (escuro, hi-tech) ================= */
+body.game { background: #05080e; background-image: linear-gradient(rgba(63,240,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(63,240,255,.05) 1px, transparent 1px); background-size: 32px 32px; color: #cfe7ff; }
+body.game .topbar { background: linear-gradient(90deg, #0a1220, #12203a 50%, #1a0f2a); box-shadow: 0 1px 0 #3ff0ff, 0 0 14px rgba(63,240,255,.25); }
+body.game .brand { color: #3ff0ff; text-shadow: 0 0 8px #3ff0ff; }
+body.game button { background: #0f2033; color: #cfe7ff; box-shadow: none; border: 1px solid #1d3350; }
+body.game button:hover { border-color: #3ff0ff; color: #fff; }
+body.game #btn-game { border-color: #ff3fd8; color: #ff9fe8; box-shadow: 0 0 8px rgba(255,63,216,.4); }
+body.game .window { background: #0d1522; box-shadow: 0 0 0 1px #1d3350, 0 0 18px rgba(63,240,255,.12); }
+body.game .title-bar { background: linear-gradient(90deg, #0b3a52, #3a0f4a); }
+body.game .title-bar-text { color: #e9fbff; text-shadow: 0 0 6px rgba(63,240,255,.7); }
+body.game .title-bar-controls button { background-color: #0f2033; }
+body.game .sunken-panel, body.game #nav { background: #070b12; box-shadow: inset 0 0 0 1px #1d3350; }
+body.game #search { background: #070b12; color: #cfe7ff; box-shadow: inset 0 0 0 1px #1d3350; }
+body.game #nav h3 { color: #ff9fe8; }
+body.game #nav a { color: #cfe7ff; }
+body.game #nav a:hover { background: #12203a; }
+body.game #nav a.active { background: linear-gradient(90deg, #0b5f7a, #3a0f4a); color: #fff; box-shadow: 0 0 8px rgba(63,240,255,.35); }
+body.game .main .window-body, body.game .home { background: #070b12; color: #cfe7ff; }
+body.game .home h2 { color: #3ff0ff; text-shadow: 0 0 6px rgba(63,240,255,.5); }
+body.game .tile { background: #0d1522; color: #cfe7ff; box-shadow: inset 0 0 0 1px #1d3350; }
+body.game .tile:hover { box-shadow: inset 0 0 0 1px #3ff0ff, 0 0 12px rgba(63,240,255,.3); background: #101c2c; }
+body.game .tile span.desc { color: #8fa9c6; }
+body.game .status-bar { background: #0a1220; }
+body.game .status-bar-field { background: #070b12; color: #6d87a6; box-shadow: inset 0 0 0 1px #1d3350; }
+body.game .main iframe { background: #070b12; }
+body.game .game-intro { font: bold 13px "Courier New", monospace; color: #ff9fe8; margin: 0 0 10px; letter-spacing: 1px; }
+body.game #chatWin .window-body, body.game .chat-users, body.game .chat-msgs { background: #070b12; color: #cfe7ff; }
+body.game .chat-msgs .msg { background: #0d1522; border-color: #1d3350; } body.game .chat-msgs .msg.mine { background: #102a3a; }
+body.game .chat-users li.sel { background: #0b5f7a; }
+body.game input[type=text], body.game #chatText, body.game #chatName { background: #070b12; color: #cfe7ff; }

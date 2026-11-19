@@ -22,6 +22,7 @@ import * as sdrInstall from "./lib/sdr/install.mjs";
 import * as sats from "./lib/sdr/sat.mjs";
 import * as clock from "./lib/clock.mjs";
 import { attachChat } from "./lib/chat.mjs";
+import * as cities from "./lib/cities.mjs";
 
 const PORT = Number(process.env.TOOLBOX_PORT) || 3098;
 const HOST = "0.0.0.0"; // aceita conexões da rede local (ver lib/access.mjs)
@@ -210,6 +211,23 @@ app.post("/api/sat/record", async (req, res) => {
   try { res.json(req.body?.on ? sats.startPass(req.body.norad) : await sats.stopPass()); } catch (e) { res.status(400).json({ error: e.message }); }
 });
 app.get("/api/sat/images", (req, res) => res.json(sats.listImages().slice(0, 80)));
+
+// ---------- NetCyties (jogo: cada IP é dono de uma cidade) ----------
+const myCity = req => cities.cityIdFor(access.clientIp(req), access.isLocal(req));
+const cityOut = (c, mine) => ({ ...c, mine, N: cities.N });
+app.get("/api/city/me", (req, res) => res.json({ city: cityOut(cities.getCity(myCity(req), true), true), tools: cities.TOOLS }));
+app.get("/api/city/world", (req, res) => res.json({ ...cities.world(), me: myCity(req) }));
+app.get("/api/city/view/:id", (req, res) => {
+  const c = cities.getCity(String(req.params.id));
+  c ? res.json({ city: cityOut(c, c.id === myCity(req)) }) : res.status(404).json({ error: "Cidade não encontrada." });
+});
+// obras: o servidor sempre usa o IP de quem pediu — ninguém mexe na cidade dos outros
+app.post("/api/city/edit", (req, res) => {
+  try { const r = cities.edit(myCity(req), String(req.body?.tool || ""), req.body?.cells); res.json({ city: cityOut(r.city, true), done: r.done, spent: r.spent }); }
+  catch (e) { res.status(400).json({ error: e.message }); }
+});
+app.post("/api/city/expand", (req, res) => { try { res.json({ city: cityOut(cities.expand(myCity(req)), true) }); } catch (e) { res.status(400).json({ error: e.message }); } });
+app.post("/api/city/settings", (req, res) => res.json({ city: cityOut(cities.settings(myCity(req), req.body || {}), true) }));
 
 // ---------- Relógios ----------
 app.get("/api/clock/ntp", async (req, res) => res.json(await clock.checkAll()));
