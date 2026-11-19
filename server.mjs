@@ -216,6 +216,22 @@ app.get("/api/sat/images", (req, res) => res.json(sats.listImages().slice(0, 80)
 // ---------- NetCyties (jogo: cada IP é dono de uma cidade) ----------
 const myCity = req => cities.cityIdFor(access.clientIp(req), access.isLocal(req));
 const cityOut = (c, mine) => ({ ...c, mine, N: cities.N });
+// Saves de jogos (progresso permanente): um arquivo por jogo e por aparelho (IP), em data/saves
+const SAVE_GAMES = new Set(["rogue-bastion"]);
+const saveFile = (req, game) => path.join(DATA, "saves", game, `${String(myCity(req)).replace(/[^\w.-]/g, "_")}.json`);
+app.get("/api/save/:game", (req, res) => {
+  if (!SAVE_GAMES.has(req.params.game)) return res.status(404).json({ error: "Jogo desconhecido." });
+  try { res.json({ save: JSON.parse(fs.readFileSync(saveFile(req, req.params.game), "utf8")) }); } catch { res.json({ save: null }); }
+});
+app.put("/api/save/:game", (req, res) => {
+  if (!SAVE_GAMES.has(req.params.game)) return res.status(404).json({ error: "Jogo desconhecido." });
+  const body = JSON.stringify(req.body?.save ?? null);
+  if (body.length > 32768) return res.status(413).json({ error: "Save grande demais." });
+  const f = saveFile(req, req.params.game);
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f, body);
+  res.json({ ok: true });
+});
 app.get("/api/city/me", (req, res) => res.json({ city: cityOut(cities.getCity(myCity(req), true), true), tools: cities.TOOLS }));
 app.get("/api/city/world", (req, res) => res.json({ ...cities.world(), me: myCity(req) }));
 app.get("/api/city/view/:id", (req, res) => {

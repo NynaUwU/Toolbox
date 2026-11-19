@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rogue Bastion</title>
+<link rel="stylesheet" href="/vendor/98/98.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; overflow: hidden; user-select: none; }
+  body { background: #008080; font-family: "Pixelated MS Sans Serif", Arial, sans-serif; font-size: 11px; }
+  #app { position: fixed; inset: 0; display: flex; flex-direction: column; margin: 0; }
+  #app > .title-bar img { width: 14px; height: 14px; image-rendering: pixelated; vertical-align: -3px; margin-right: 4px; }
+  .menubar { display: flex; padding: 1px 2px; position: relative; z-index: 30; }
+  .menubar > .mi { padding: 2px 7px; cursor: default; }
+  .menubar > .mi:hover, .menubar > .mi.open { background: #000080; color: #fff; }
+  .dropdown { position: absolute; top: 100%; background: #c0c0c0; min-width: 190px; padding: 2px; z-index: 40;
+    box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px grey, inset 2px 2px #fff; }
+  .dropdown div { padding: 3px 20px 3px 22px; position: relative; white-space: nowrap; display: flex; justify-content: space-between; gap: 20px; }
+  .dropdown div:hover { background: #000080; color: #fff; }
+  .dropdown div.check::before { content: "✓"; position: absolute; left: 7px; }
+  .dropdown hr { border: 0; border-top: 1px solid grey; border-bottom: 1px solid #fff; margin: 3px 1px; }
+  .dropdown kbd { font: inherit; color: inherit; opacity: .8; }
+  #main { flex: 1; display: flex; gap: 4px; min-height: 0; padding: 0 3px; }
+  #field { flex: 1; position: relative; min-width: 0; background: #000; display: flex; align-items: center; justify-content: center;
+    box-shadow: inset -1px -1px #fff, inset 1px 1px grey, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a; padding: 2px; }
+  #cv { image-rendering: pixelated; display: block; cursor: crosshair; }
+  #side { width: 232px; flex: none; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
+  #side fieldset { margin: 0; padding: 4px 6px 6px; }
+  #weapons { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+  .wbtn { display: flex; align-items: center; gap: 4px; padding: 2px 4px; min-width: 0; min-height: 0; height: 40px; text-align: left; }
+  .wbtn img { width: 28px; height: 28px; image-rendering: pixelated; flex: none; }
+  .wbtn span { display: flex; flex-direction: column; line-height: 1.25; overflow: hidden; }
+  .wbtn b { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wbtn.on { box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px grey; background: #d8d8d8; }
+  .wbtn:disabled img { filter: grayscale(1); opacity: .5; }
+  #selInfo .stats { display: grid; grid-template-columns: auto 1fr; gap: 1px 8px; margin: 4px 0; }
+  #selInfo .row { display: flex; gap: 4px; margin-top: 4px; } #selInfo .row button { flex: 1; min-width: 0; padding: 0 4px; }
+  .pips { letter-spacing: 1px; color: #000080; }
+  #wavePrev { display: flex; flex-wrap: wrap; gap: 4px 8px; min-height: 22px; margin-bottom: 4px; }
+  #wavePrev span { display: flex; align-items: center; gap: 2px; } #wavePrev img { width: 18px; height: 18px; image-rendering: pixelated; }
+  .bigbtn { width: 100%; height: 30px; font-weight: bold; }
+  .speeds { display: flex; gap: 3px; } .speeds button { flex: 1; min-width: 0; }
+  .speeds button.on { box-shadow: inset -1px -1px #fff, inset 1px 1px #0a0a0a, inset -2px -2px #dfdfdf, inset 2px 2px grey; }
+  #app > .status-bar { margin: 3px; }
+  .status-bar-field { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tip98 { background: #ffffe1; color: #000; border: 1px solid #000; padding: 1px 5px; box-shadow: 1px 1px 0 rgba(0,0,0,.35); }
+  #toast { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 5; }
+  #banner { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); font: bold 28px "Pixelated MS Sans Serif", Arial; color: #fff; text-shadow: 2px 2px 0 #000; pointer-events: none; opacity: 0; transition: opacity .4s; white-space: nowrap; }
+  /* diálogos */
+  .back { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,.25); }
+  .back[hidden] { display: none; }
+  .dlg { max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); display: flex; flex-direction: column; }
+  .dlg > .window-body { overflow: auto; min-height: 0; }
+  .buttons { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; align-items: center; }
+  .buttons button { min-width: 80px; }
+  .buttons .grow { flex: 1; }
+  .msgbox { display: flex; gap: 12px; align-items: flex-start; }
+  .errico { width: 32px; height: 32px; border-radius: 50%; background: #e00000; color: #fff; font: bold 20px Arial; display: flex; align-items: center; justify-content: center; flex: none; box-shadow: inset -2px -2px #900, 1px 1px 0 #000; }
+  .infoico { width: 32px; height: 32px; border-radius: 50%; background: #fff; color: #000080; font: bold 20px "Times New Roman", serif; display: flex; align-items: center; justify-content: center; flex: none; box-shadow: inset -1px -1px grey, 1px 1px 0 #000; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+  .card { display: flex; flex-direction: column; align-items: stretch; gap: 3px; height: auto; min-height: 118px; padding: 6px; text-align: left; }
+  .card .head { display: flex; gap: 6px; align-items: center; }
+  .card img { width: 32px; height: 32px; image-rendering: pixelated; }
+  .card b { font-size: 11px; }
+  .card .kind { color: #808080; font-size: 10px; }
+  .card .desc { flex: 1; line-height: 1.35; }
+  .card .price { font-weight: bold; align-self: flex-end; }
+  .card.sold { opacity: .5; }
+  .card.cant .price { color: #a00000; }
+  table.lab { width: 100%; border-collapse: collapse; background: #fff; }
+  table.lab td, table.lab th { padding: 3px 6px; text-align: left; border-bottom: 1px solid #dfdfdf; vertical-align: middle; }
+  table.lab th { background: #c0c0c0; box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff; font-weight: normal; }
+  table.lab .lv { font-family: monospace; letter-spacing: 1px; color: #000080; white-space: nowrap; }
+  table.lab button { min-width: 70px; }
+  .summary { display: grid; grid-template-columns: auto auto; gap: 2px 16px; margin: 6px 0; }
+  .summary b { text-align: right; }
+  .datatot { font-size: 13px; margin-top: 6px; }
+  .keys { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+  .keys b { white-space: nowrap; }
+  [hidden] { display: none !important; }
+</style>
+</head><body>
+<div class="window" id="app">
+  <div class="title-bar"><div class="title-bar-text"><img id="titleIco" alt=""><span>Rogue Bastion</span></div>
+    <div class="title-bar-controls"><button aria-label="Minimize" id="tbMin" title="Pausar"></button><button aria-label="Maximize" id="tbMax" title="Tela cheia"></button><button aria-label="Close" id="tbClose" title="Fechar o jogo"></button></div></div>
+  <div class="menubar">
+    <div class="mi" data-menu="mGame"><u>J</u>ogo</div>
+    <div class="mi" data-menu="mSpeed"><u>V</u>elocidade</div>
+    <div class="mi" data-menu="mHelp"><u>A</u>juda</div>
+    <div class="dropdown" id="mGame" hidden>
+      <div data-act="new">Nova run…</div>
+      <div data-act="pause">Pausar / continuar <kbd>P</kbd></div>
+      <div data-act="lab">Laboratório (upgrades permanentes)…</div>
+      <hr>
+      <div data-act="giveup">Desistir da run</div>
+      <div data-act="close">Sair</div>
+    </div>
+    <div class="dropdown" id="mSpeed" hidden>
+      <div data-act="speed1" id="mS1">Normal (1×)</div>
+      <div data-act="speed2" id="mS2">Rápida (2×)</div>
+      <div data-act="speed3" id="mS3">Turbo (3×)</div>
+    </div>
+    <div class="dropdown" id="mHelp" hidden>
+      <div data-act="help">Como jogar…</div>
+      <div data-act="about">Sobre o Rogue Bastion…</div>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="field">
+      <canvas id="cv" width="832" height="480"></canvas>
+      <div class="tip98" id="toast"></div>
+      <div id="banner"></div>
+    </div>
+    <div id="side">
+      <fieldset><legend>Armas</legend><div id="weapons"></div></fieldset>
+      <fieldset id="selBox"><legend>Torre selecionada</legend><div id="selInfo"><p style="margin:2px 0;color:#808080">Clique numa torre para ver, melhorar ou vender.</p></div></fieldset>
+      <fieldset><legend id="waveLegend">Próxima wave</legend>
+        <div id="wavePrev"></div>
+        <button class="bigbtn default" id="btnWave">▶ Iniciar wave 1</button>
+        <div style="height:3px"></div>
+        <button class="bigbtn" id="btnShop" disabled>🛒 Loja</button>
+      </fieldset>
+      <fieldset><legend>Velocidade</legend><div class="speeds"><button data-sp="1">1×</button><button data-sp="2">2×</button><button data-sp="3">3×</button><button id="btnPause">❚❚</button></div></fieldset>
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <p class="status-bar-field" id="stWave">Wave —</p>
+    <p class="status-bar-field" id="stLives">♥ —</p>
+    <p class="status-bar-field" id="stMoney">$ —</p>
+    <p class="status-bar-field" id="stEnemies">Inimigos —</p>
+    <p class="status-bar-field" id="stData">◆ —</p>
+    <p class="status-bar-field" id="stBest">Recorde —</p>
+  </div>
+</div>
+
+<!-- Início -->
+<div class="back" id="dTitle">
+  <div class="window dlg" style="width:440px">
+    <div class="title-bar"><div class="title-bar-text">Bem-vindo ao Rogue Bastion</div></div>
+    <div class="window-body">
+      <div class="msgbox"><img id="logo" alt="" style="width:48px;height:48px;image-rendering:pixelated"><div>
+        <p><b>Defenda o núcleo.</b> Cada run tem um mapa novo. Construa e melhore torres a qualquer momento, inclusive durante a wave.</p>
+        <p>Inimigos soltam moedas: <b>passe o mouse por cima</b> para coletar antes que sumam. Entre as waves, a loja vende armas novas, tiers e melhorias.</p>
+        <p>Perdeu? Tudo recomeça, mas você ganha <b>◆ Data</b> para upgrades permanentes no Laboratório. Eles são caros de propósito.</p>
+      </div></div>
+      <div class="buttons"><button data-act="help">Como jogar…</button><button data-act="lab">Laboratório…</button><button class="default" data-act="newnow">Nova run</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Loja -->
+<div class="back" id="dShop" hidden>
+  <div class="window dlg" style="width:640px">
+    <div class="title-bar"><div class="title-bar-text" id="shopTitle">Loja</div><div class="title-bar-controls"><button aria-label="Close" data-close="dShop"></button></div></div>
+    <div class="window-body">
+      <p id="shopIncome"></p>
+      <div class="cards" id="cards"></div>
+      <div class="buttons"><span class="grow" id="shopMoney"></span><button id="btnReroll">🎲 Trocar ofertas</button><button data-close="dShop">Construir</button><button class="default" id="btnShopWave">▶ Iniciar wave</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Fim da run -->
+<div class="back" id="dOver" hidden>
+  <div class="window dlg" style="width:380px">
+    <div class="title-bar"><div class="title-bar-text">Rogue Bastion</div></div>
+    <div class="window-body">
+      <div class="msgbox"><div class="errico">✕</div><div>
+        <p><b>O núcleo foi destruído.</b></p><p id="overWhy"></p>
+        <div class="summary" id="overSum"></div>
+        <p class="datatot" id="overData"></p>
+      </div></div>
+      <div class="buttons"><button class="default" data-act="lab">Laboratório…</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Laboratório -->
+<div class="back" id="dLab" hidden>
+  <div class="window dlg" style="width:620px">
+    <div class="title-bar"><div class="title-bar-text">Laboratório — upgrades permanentes</div><div class="title-bar-controls"><button aria-label="Close" data-close="dLab"></button></div></div>
+    <div class="window-body">
+      <div class="msgbox"><div class="infoico">i</div><div><p id="labData"></p><p>Os upgrades valem para todas as próximas runs. Cada nível fica bem mais caro que o anterior.</p></div></div>
+      <div class="sunken-panel" style="max-height:340px;overflow:auto;margin-top:6px"><table class="lab"><thead><tr><th>Upgrade</th><th>Nível</th><th>Efeito</th><th>Preço</th><th></th></tr></thead><tbody id="labRows"></tbody></table></div>
+      <div class="buttons"><span class="grow" id="labStats"></span><button data-close="dLab">Fechar</button><button class="default" data-act="newnow">Nova run</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Ajuda -->
+<div class="back" id="dHelp" hidden>
+  <div class="window dlg" style="width:500px">
+    <div class="title-bar"><div class="title-bar-text">Como jogar</div><div class="title-bar-controls"><button aria-label="Close" data-close="dHelp"></button></div></div>
+    <div class="window-body">
+      <fieldset><legend>Básico</legend>
+        <p>Escolha uma arma à direita e clique num espaço livre do mapa (não dá para construir na estrada nem em pedras e árvores). Clique numa torre para melhorar (até o tier liberado na loja), trocar o alvo ou vender (devolve 60%).</p>
+        <p>As moedas que os inimigos soltam somem em alguns segundos: passe o mouse por cima delas. No fim da wave, as que sobraram vêm sozinhas.</p>
+        <p>Cada inimigo que chega ao núcleo tira vidas (chefes tiram 5). A cada 10 waves aparece um chefe.</p>
+      </fieldset>
+      <fieldset><legend>Teclas</legend><div class="keys">
+        <b>1–8</b><span>escolher arma · <b>Esc</b> / botão direito: cancelar</span>
+        <b>U</b><span>melhorar a torre selecionada · <b>S</b> / Delete: vender</span>
+        <b>Espaço</b><span>iniciar a próxima wave · <b>P</b>: pausar</span>
+        <b>F</b><span>alternar velocidade (1×, 2×, 3×)</span>
+      </div></fieldset>
+      <fieldset><legend>Inimigos</legend><div class="keys" id="helpEnemies"></div></fieldset>
+      <div class="buttons"><button class="default" data-close="dHelp">OK</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Sobre -->
+<div class="back" id="dAbout" hidden>
+  <div class="window dlg" style="width:300px">
+    <div class="title-bar"><div class="title-bar-text">Sobre o Rogue Bastion</div><div class="title-bar-controls"><button aria-label="Close" data-close="dAbout"></button></div></div>
+    <div class="window-body"><div class="msgbox"><img id="logo2" alt="" style="width:40px;height:40px;image-rendering:pixelated"><div><p><b>Rogue Bastion</b> — parte da Toolbox.</p><p>Tower defense roguelite. O progresso permanente fica salvo no servidor da Toolbox, por aparelho.</p></div></div>
+      <div class="buttons"><button class="default" data-close="dAbout">OK</button></div></div>
+  </div>
+</div>
+
+<script type="module" src="game.js"></script>
+</body></html>

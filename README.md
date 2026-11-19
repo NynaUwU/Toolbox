@@ -55,7 +55,7 @@ Para iniciar junto com o Windows: `Win + R` → `shell:startup` → cole ali um 
 - **Modo demonstração:** sem dongle, um simulador gera sinais de teste (FM, aviação, APRS, DTMF, controle 433, ADS-B, satélite, TV, WWV).
 - Gravações: `Output\Rádio` (áudio), `Output\SDR\IQ`, `Output\SDR\Capturas`, `Output\SDR\Logs`, `Output\Satélites`.
 
-## Modo jogo, NetCyties e BlockVerse
+## Modo jogo, NetCyties, BlockVerse e Rogue Bastion
 
 - Botão **🎮 Modo jogo** no topo: tema escuro hi-tech e a barra lateral passa a mostrar só os jogos (🧰 volta às ferramentas).
 - **NetCyties**: city builder isométrico — cada aparelho da rede (cada IP) é dono de uma cidade e só ele pode construir nela; as outras podem ser visitadas.
@@ -72,6 +72,14 @@ Para iniciar junto com o Windows: `Win + R` → `shell:startup` → cole ali um 
   - **Plantação:** enxada → terra arada; trigo e cenoura em 8 estágios (mais rápido com água por perto); pão; mudas viram árvores.
   - **Energia:** Power Cable (sinal cai 1 por bloco), Power Core, Lever, Button, Lamp, Inverter (inverte o sinal de baixo) e Door automática.
   - Dia/noite de 10 min, luz de tochas/lâmpadas, chat no jogo. Mundo salvo em `data\blockverse`.
+
+- **Rogue Bastion**: tower defense roguelite numa janela estilo Windows 98.
+  - **Mapa aleatório** a cada run (estrada sinuosa, obstáculos e 4 temas: Meadow, Dunes, Tundra, Ashlands).
+  - **8 armas** (Blaster, Cannon, Frost, Tesla, Sniper, Flamer, Missile, Laser), cada uma com 5 tiers; construir, melhorar e vender a qualquer momento, inclusive durante a wave.
+  - **Moedas:** os inimigos soltam moedas que somem em poucos segundos — passe o mouse por cima para coletar.
+  - **Loja entre as waves:** armas novas, novos tiers e melhorias da run (dano, cadência, alcance, juros, ímã…), com ofertas aleatórias e troca paga.
+  - **9 inimigos** (voadores, blindados, escudos, curandeiros, divisores) e um chefe a cada 10 waves.
+  - **Laboratório:** ao perder, a run recomeça e você ganha ◆ Data para upgrades permanentes — caros de propósito (o 1º nível custa mais ou menos uma run mediana). Salvo no servidor, por aparelho (`data\saves`).
 
 ## Chat
 
