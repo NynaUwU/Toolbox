@@ -1,0 +1,10 @@
+{
+  "title": "MechLab — guia visual de mecânica",
+  "description": "Princípios mecânicos animados e interativos: alavancas, engrenagens, juntas, suspensões, motores, corte e usinagem, hidráulica, pneumática, rolamentos e materiais.",
+  "icon": "⚙️",
+  "order": 1,
+  "window": true,
+  "width": 1180,
+  "height": 860,
+  "category": "Mecânica"
+}

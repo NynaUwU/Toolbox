@@ -2,8 +2,8 @@
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // Ordem e ícones das categorias (categorias novas vindas do meta.json entram no fim)
-const CATEGORY_ORDER = ["Eletrônica", "Rádio (RTL-SDR)", "Edição de mídia", "Mídia e arquivos", "Conversores", "Sistema e rede", "Utilitários", "Outras ferramentas", "Meus sites", "Atalhos"];
-const CATEGORY_ICON = { "Jogos": "🎮", "Eletrônica": "⚡", "Rádio (RTL-SDR)": "📡", "Edição de mídia": "🖌️", "Mídia e arquivos": "🎞️", "Conversores": "🔄", "Sistema e rede": "🖥️", "Utilitários": "🧩", "Outras ferramentas": "🛠️", "Meus sites": "🌐", "Atalhos": "🔗" };
+const CATEGORY_ORDER = ["Eletrônica", "Mecânica", "Rádio (RTL-SDR)", "Edição de mídia", "Mídia e arquivos", "Conversores", "Sistema e rede", "Utilitários", "Outras ferramentas", "Meus sites", "Atalhos"];
+const CATEGORY_ICON = { "Jogos": "🎮", "Eletrônica": "⚡", "Mecânica": "⚙️", "Rádio (RTL-SDR)": "📡", "Edição de mídia": "🖌️", "Mídia e arquivos": "🎞️", "Conversores": "🔄", "Sistema e rede": "🖥️", "Utilitários": "🧩", "Outras ferramentas": "🛠️", "Meus sites": "🌐", "Atalhos": "🔗" };
 function categories(list) {
   const names = [...new Set(list.map(i => i.category))];
   const rank = c => (CATEGORY_ORDER.indexOf(c) + 1) || 99;
